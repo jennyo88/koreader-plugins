@@ -29,21 +29,34 @@ local Screen = Device.screen
 -- Locate plugin directory
 -- ---------------------------------------------------------
 
-local source =
-    debug.getinfo(1, "S").source
+local source = debug.getinfo(1, "S").source
 
 local plugin_dir =
     source:match("^@(.+)/[^/]+$")
+    or "/mnt/us/koreader/plugins/readingdashboard.koplugin"
 
-if not plugin_dir then
-    plugin_dir =
-        "/mnt/us/koreader/plugins/readingdashboard.koplugin"
+
+local function loadUpdater()
+    local ok, updater_or_error =
+        pcall(
+            dofile,
+            plugin_dir .. "/updater.lua"
+        )
+
+    if not ok then
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Updater could not be loaded.\n\n"
+                    .. tostring(updater_or_error),
+            }
+        )
+
+        return nil
+    end
+
+    return updater_or_error
 end
-
-local Updater =
-    dofile(
-        plugin_dir .. "/updater.lua"
-    )
 
 
 -- ---------------------------------------------------------
@@ -1080,13 +1093,16 @@ function ReadingDashboard:addToMainMenu(
                 text =
                     _("Check for Updates"),
 
-                callback =
-                    function()
 
+                callback = function()
+                    local Updater = loadUpdater()
+
+                    if Updater then
                         Updater:checkForUpdates(
                             PLUGIN_VERSION
                         )
-                    end,
+                    end
+                end,
             },
 
 
@@ -1094,11 +1110,13 @@ function ReadingDashboard:addToMainMenu(
                 text =
                     _("Restore Previous Version"),
 
-                callback =
-                    function()
+                callback = function()
+                    local Updater = loadUpdater()
 
+                    if Updater then
                         Updater:confirmRestore()
-                    end,
+                    end
+                end,
             },
 
 
