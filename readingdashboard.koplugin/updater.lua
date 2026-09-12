@@ -661,33 +661,57 @@ function Updater:performUpdate(plugin)
     end
 
     UIManager:show(
-        InfoMessage:new{
+        ConfirmBox:new{
             text =
                 string.format(
                     _(
-                        "Reading Dashboard %s installed successfully.\n\nRestart KOReader to use the new version."
+                        "Reading Dashboard %s installed successfully.\n\nThis will take effect on next restart."
                     ),
                     tostring(
                         plugin.version
                     )
                 ),
+            ok_text =
+                _("Restart now"),
+            
+            cancel_text =
+                _("Restart later"),
+            
+            ok_callback =
+                function()
+                    UIManager:restartKOReader()
+                end,
         }
     )
 end
 
 
 function Updater:checkForUpdates(installed_version)
-    UIManager:show(
+
+    local checking_message =
         InfoMessage:new{
             text =
                 _("Checking for updates…"),
         }
+
+    UIManager:show(
+        checking_message
     )
+
 
     local plugin, err =
         self:getManifest()
 
+
+    -- Always close the temporary checking message
+    -- before showing the result.
+    UIManager:close(
+        checking_message
+    )
+
+
     if not plugin then
+
         UIManager:show(
             InfoMessage:new{
                 text =
@@ -701,13 +725,16 @@ function Updater:checkForUpdates(installed_version)
         return
     end
 
+
     local comparison =
         compare_versions(
             installed_version,
             plugin.version
         )
 
+
     if comparison >= 0 then
+
         UIManager:show(
             InfoMessage:new{
                 text =
@@ -728,6 +755,7 @@ function Updater:checkForUpdates(installed_version)
         return
     end
 
+
     UIManager:show(
         ConfirmBox:new{
             text =
@@ -746,8 +774,12 @@ function Updater:checkForUpdates(installed_version)
             ok_text =
                 _("Update"),
 
+            cancel_text =
+                _("Cancel"),
+
             ok_callback =
                 function()
+
                     self:performUpdate(
                         plugin
                     )
