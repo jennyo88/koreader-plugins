@@ -1,489 +1,184 @@
 local BookList = require("ui/widget/booklist")
-local Device = require("device")
 local DocSettings = require("docsettings")
 local lfs = require("libs/libkoreader-lfs")
 
 local Library = {}
 
+Library.extensions = { epub = true }
 
--- ---------------------------------------------------------
--- Configuration
--- ---------------------------------------------------------
-
-Library.extensions = {
-    epub = true,
+local ignored_names = {
+    ["."] = true, [".."] = true, [".adds"] = true,
+    [".git"] = true, ["koreader"] = true, ["system"] = true,
 }
-
-Library.ignored_directories = {
-    ["."] = true,
-    [".."] = true,
-
-    [".sdr"] = true,
-    [".adds"] = true,
-    [".git"] = true,
-
-    ["koreader"] = true,
-    ["system"] = true,
-    ["documents/.sdr"] = true,
-}
-
-
--- ---------------------------------------------------------
--- Helpers
--- ---------------------------------------------------------
 
 local function basename(path)
     return path:match("([^/]+)$") or path
 end
 
-
 local function dirname(path)
     return path:match("^(.*)/[^/]+$")
 end
 
-
 local function extension(path)
-
-    local ext =
-        path:match("%.([^./]+)$")
-
-    if not ext then
-        return nil
-    end
-
-    return ext:lower()
+    local ext = path:match("%.([^./]+)$")
+    return ext and ext:lower() or nil
 end
 
-
-local function isSupportedBook(path)
-
-    local ext =
-        extension(path)
-
-    return ext
-        and Library.extensions[ext]
-        or false
+local function is_dir(path)
+    local a = lfs.attributes(path)
+    return a and a.mode == "directory"
 end
 
-
-local function shouldIgnoreDirectory(path)
-
-    local name =
-        basename(path)
-
-    if Library.ignored_directories[name] then
-        return true
-    end
-
-    -- KOReader sidecar folders.
-    if name:match("%.sdr$") then
-        return true
-    end
-
-    -- Hidden directories are ignored by default.
-    if name:sub(1, 1) == "." then
-        return true
-    end
-
-    return false
+local function should_ignore_dir(path)
+    local name = basename(path)
+    return ignored_names[name]
+        or name:sub(1, 1) == "."
+        or name:match("%.sdr$") ~= nil
 end
 
-
-local function fileExists(path)
-
-    local attr =
-        lfs.attributes(path)
-
-    return attr
-        and attr.mode == "file"
+local function supported(path)
+    local ext = extension(path)
+    return ext and Library.extensions[ext] == true
 end
 
-
--- ---------------------------------------------------------
--- Book state
--- ---------------------------------------------------------
+function Library:getDefaultRoot()
+    if is_dir("/mnt/us/documents") then
+        return "/mnt/us/documents"
+    end
+    return "/mnt/us"
+end
 
 function Library:getBookStatus(file)
-
-    -- First use KOReader's book cache.
-    local ok, status =
-        pcall(
-            BookList.getBookStatus,
-            file
-        )
+    local ok, status = pcall(function()
+        if BookList.getBookStatus then
+            return BookList:getBookStatus(file)
+        end
+    end)
 
     if ok and status then
         return status
     end
 
+    local settings_ok, settings = pcall(function()
+        return DocSettings:open(file)
+    end)
 
-    -- Fall back to document settings when available.
-    local settings_ok, doc_settings =
-        pcall(
-            DocSettings.open,
-            DocSettings,
-            file
-        )
-
-    if not settings_ok
-        or not doc_settings then
-
-        return nil
+    if settings_ok and settings then
+        local summary = settings:readSetting("summary")
+        if summary and summary.status then
+            return summary.status
+        end
     end
-
-
-    local summary =
-        doc_settings:readSetting(
-            "summary"
-        )
-
-    if summary
-        and summary.status then
-
-        return summary.status
-    end
-
 
     return nil
 end
 
-
 function Library:hasBeenOpened(file)
+    local ok, opened = pcall(function()
+        if BookList.hasBookBeenOpened then
+            return BookList:hasBookBeenOpened(file)
+        end
+    end)
 
-    local ok, opened =
-        pcall(
-            BookList.hasBookBeenOpened,
-            file
-        )
-
-    if ok then
+    if ok and opened ~= nil then
         return opened == true
     end
 
-    return false
-end
+    local settings_ok, settings = pcall(function()
+        return DocSettings:open(file)
+    end)
 
+    if not settings_ok or not settings then
+        return false
+    end
+
+    return settings:readSetting("percent_finished") ~= nil
+        or settings:readSetting("last_xpointer") ~= nil
+        or settings:readSetting("last_page") ~= nil
+end
 
 function Library:isFinished(file)
-
-    return
-        self:getBookStatus(file)
-        == "complete"
+    return self:getBookStatus(file) == "complete"
 end
-
-
--- ---------------------------------------------------------
--- Metadata
--- ---------------------------------------------------------
 
 function Library:getMetadata(file)
-
-    local metadata = {
-        file =
-            file,
-
-        filename =
-            basename(file),
-
-        directory =
-            dirname(file),
-
-        title =
-            nil,
-
-        authors =
-            nil,
-
-        series =
-            nil,
-
-        series_index =
-            nil,
-
-        pages =
-            nil,
-
-        percent_finished =
-            nil,
-
-        status =
-            self:getBookStatus(file),
-
-        been_opened =
-            self:hasBeenOpened(file),
+    local book = {
+        file = file,
+        filename = basename(file),
+        directory = dirname(file),
+        title = nil,
+        authors = nil,
+        series = nil,
+        series_index = nil,
+        pages = nil,
+        percent_finished = nil,
+        status = self:getBookStatus(file),
+        been_opened = self:hasBeenOpened(file),
     }
 
+    local ok, settings = pcall(function()
+        return DocSettings:open(file)
+    end)
 
-    if not metadata.been_opened then
-        return metadata
+    if not ok or not settings then
+        return book
     end
 
+    local props = settings:readSetting("doc_props") or {}
+    book.title = props.title
+    book.authors = props.authors
+    book.series = props.series
+    book.series_index = props.series_index
+    book.pages = settings:readSetting("doc_pages")
+    book.percent_finished = settings:readSetting("percent_finished")
 
-    local ok, doc_settings =
-        pcall(
-            BookList.getDocSettings,
-            file
-        )
-
-    if not ok
-        or not doc_settings then
-
-        return metadata
-    end
-
-
-    local props =
-        doc_settings:readSetting(
-            "doc_props"
-        ) or {}
-
-
-    metadata.title =
-        props.title
-
-    metadata.authors =
-        props.authors
-
-    metadata.series =
-        props.series
-
-    metadata.series_index =
-        props.series_index
-
-    metadata.pages =
-        doc_settings:readSetting(
-            "doc_pages"
-        )
-
-    metadata.percent_finished =
-        doc_settings:readSetting(
-            "percent_finished"
-        )
-
-
-    return metadata
+    return book
 end
 
-
--- ---------------------------------------------------------
--- Scanning
--- ---------------------------------------------------------
-
 function Library:scanDirectory(path, results)
+    results = results or {}
 
-    results =
-        results or {}
-
-
-    local attr =
-        lfs.attributes(path)
-
-    if not attr
-        or attr.mode ~= "directory" then
-
+    if not is_dir(path) then
         return results
     end
 
-
     for entry in lfs.dir(path) do
+        if entry ~= "." and entry ~= ".." then
+            local full = path .. "/" .. entry
+            local attr = lfs.attributes(full)
 
-        if entry ~= "."
-            and entry ~= ".." then
-
-            local full_path =
-                path .. "/" .. entry
-
-            local entry_attr =
-                lfs.attributes(
-                    full_path
-                )
-
-
-            if entry_attr then
-
-                if entry_attr.mode == "directory" then
-
-                    if not shouldIgnoreDirectory(
-                        full_path
-                    ) then
-
-                        self:scanDirectory(
-                            full_path,
-                            results
-                        )
+            if attr then
+                if attr.mode == "directory" then
+                    if not should_ignore_dir(full) then
+                        self:scanDirectory(full, results)
                     end
-
-
-                elseif entry_attr.mode == "file"
-                    and isSupportedBook(
-                        full_path
-                    ) then
-
-                    table.insert(
-                        results,
-                        full_path
-                    )
+                elseif attr.mode == "file" and supported(full) then
+                    table.insert(results, full)
                 end
             end
         end
     end
 
-
     return results
 end
 
-
--- ---------------------------------------------------------
--- Library root
--- ---------------------------------------------------------
-
-function Library:getDefaultRoot()
-
-    -- Kindle / KOReader user storage.
-    if Device.home_dir then
-        return Device.home_dir
-    end
-
-    return "/mnt/us"
-end
-
-
--- ---------------------------------------------------------
--- Candidate books
--- ---------------------------------------------------------
-
 function Library:getCandidates(root)
-
-    root =
-        root
-        or self:getDefaultRoot()
-
-
-    local files =
-        self:scanDirectory(
-            root
-        )
-
+    root = root or self:getDefaultRoot()
 
     local books = {}
-
-
-    for _, file in ipairs(files) do
-
-        if fileExists(file)
-            and not self:isFinished(
-                file
-            ) then
-
-            table.insert(
-                books,
-                self:getMetadata(file)
-            )
+    for _, file in ipairs(self:scanDirectory(root)) do
+        if not self:isFinished(file) then
+            table.insert(books, self:getMetadata(file))
         end
     end
 
-
-    table.sort(
-        books,
-
-        function(a, b)
-
-            local a_name =
-                a.title
-                or a.filename
-                or ""
-
-            local b_name =
-                b.title
-                or b.filename
-                or ""
-
-            return
-                a_name:lower()
-                < b_name:lower()
-        end
-    )
-
+    table.sort(books, function(a, b)
+        local at = (a.title or a.filename or ""):lower()
+        local bt = (b.title or b.filename or ""):lower()
+        return at < bt
+    end)
 
     return books
 end
-
-
--- ---------------------------------------------------------
--- Convenience filters
--- ---------------------------------------------------------
-
-function Library:getUnopenedBooks(root)
-
-    local books =
-        self:getCandidates(root)
-
-    local results = {}
-
-
-    for _, book in ipairs(books) do
-
-        if not book.been_opened then
-            table.insert(
-                results,
-                book
-            )
-        end
-    end
-
-
-    return results
-end
-
-
-function Library:getStartedBooks(root)
-
-    local books =
-        self:getCandidates(root)
-
-    local results = {}
-
-
-    for _, book in ipairs(books) do
-
-        if book.been_opened
-            and book.status ~= "complete" then
-
-            table.insert(
-                results,
-                book
-            )
-        end
-    end
-
-
-    return results
-end
-
-
-function Library:getSeriesBooks(root)
-
-    local books =
-        self:getCandidates(root)
-
-    local results = {}
-
-
-    for _, book in ipairs(books) do
-
-        if book.series
-            and book.series ~= "" then
-
-            table.insert(
-                results,
-                book
-            )
-        end
-    end
-
-
-    return results
-end
-
 
 return Library
