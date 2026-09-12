@@ -4,22 +4,30 @@ math.randomseed(os.time())
 
 local function copy(list)
     local out = {}
-    for i, v in ipairs(list or {}) do out[i] = v end
+    for i, value in ipairs(list or {}) do
+        out[i] = value
+    end
     return out
 end
 
 local function shuffle(list)
     local out = copy(list)
+
     for i = #out, 2, -1 do
         local j = math.random(i)
         out[i], out[j] = out[j], out[i]
     end
+
     return out
 end
 
-local function first_n(list, n)
+local function first_n(list, count)
     local out = {}
-    for i = 1, math.min(n or 3, #list) do out[i] = list[i] end
+
+    for i = 1, math.min(count or 3, #list) do
+        out[i] = list[i]
+    end
+
     return out
 end
 
@@ -28,7 +36,8 @@ function Recommender:surpriseMe(books, count)
 end
 
 function Recommender:quickRead(books, count)
-    local known, unknown = {}, {}
+    local known = {}
+    local unknown = {}
 
     for _, book in ipairs(books or {}) do
         if type(book.pages) == "number" and book.pages > 0 then
@@ -39,15 +48,25 @@ function Recommender:quickRead(books, count)
     end
 
     table.sort(known, function(a, b)
+        if a.pages == b.pages then
+            return (a.title or a.filename or "") < (b.title or b.filename or "")
+        end
         return a.pages < b.pages
     end)
 
     local pool = {}
-    for i = 1, math.min(10, #known) do
-        table.insert(pool, known[i])
+    local short_limit = math.min(#known, 10)
+    local short = {}
+
+    for i = 1, short_limit do
+        table.insert(short, known[i])
     end
 
-    pool = shuffle(pool)
+    short = shuffle(short)
+
+    for _, book in ipairs(short) do
+        table.insert(pool, book)
+    end
 
     if #pool < (count or 3) then
         for _, book in ipairs(shuffle(unknown)) do
