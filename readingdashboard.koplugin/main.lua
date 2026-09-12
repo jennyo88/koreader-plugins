@@ -125,7 +125,6 @@ function ReadingDashboard:showDashboard()
 
     UIManager:show(InfoMessage:new{
         text = table.concat(lines, "\n"),
-        timeout = 0,
     })
 end
 
