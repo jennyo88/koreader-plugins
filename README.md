@@ -6,7 +6,7 @@ Personal KOReader plugins designed for my Kindle.
 
 ### Reading Dashboard
 
-Current version: `0.5.0`
+Current version: `0.5.1`
 
 Location:
 
