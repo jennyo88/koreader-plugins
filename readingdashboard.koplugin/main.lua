@@ -1,4 +1,4 @@
-local PLUGIN_VERSION = "0.5.2"
+local PLUGIN_VERSION = "0.5.3"
 
 local Blitbuffer = require("ffi/blitbuffer")
 local CenterContainer = require("ui/widget/container/centercontainer")
@@ -327,8 +327,6 @@ function DashboardDialog:init()
         )
 
 
-    -- Book title
-
     local title_widget =
         TextBoxWidget:new{
             text = self.title,
@@ -346,8 +344,6 @@ function DashboardDialog:init()
         }
 
 
-    -- Percentage
-
     local percentage_widget =
         TextWidget:new{
             text =
@@ -363,8 +359,6 @@ function DashboardDialog:init()
         }
 
 
-    -- Progress bar
-
     local progress_bar =
         ProgressBar:new{
             percentage =
@@ -379,8 +373,6 @@ function DashboardDialog:init()
                 Screen:scaleBySize(14),
         }
 
-
-    -- Page info
 
     local page_text = ""
 
@@ -426,8 +418,6 @@ function DashboardDialog:init()
                 small_face,
         }
 
-
-    -- Stat row helper
 
     local function statRow(
         label,
@@ -480,8 +470,6 @@ function DashboardDialog:init()
             }
     end
 
-
-    -- Reading section
 
     local reading_header =
         TextWidget:new{
@@ -715,6 +703,297 @@ end
 
 
 -- ---------------------------------------------------------
+-- About popup
+-- ---------------------------------------------------------
+
+local AboutDialog =
+    InputContainer:extend{
+        version = "",
+    }
+
+
+function AboutDialog:init()
+
+    local screen_width =
+        Screen:getWidth()
+
+    local card_width =
+        math.floor(
+            screen_width * 0.78
+        )
+
+    local content_width =
+        card_width
+        - Screen:scaleBySize(48)
+
+
+    local title_face =
+        Font:getFace(
+            "cfont",
+            24
+        )
+
+    local version_face =
+        Font:getFace(
+            "cfont",
+            18
+        )
+
+    local body_face =
+        Font:getFace(
+            "cfont",
+            17
+        )
+
+    local small_face =
+        Font:getFace(
+            "cfont",
+            15
+        )
+
+
+    local title_widget =
+        TextWidget:new{
+            text =
+                _("Reading Dashboard"),
+
+            face =
+                title_face,
+
+            bold = true,
+        }
+
+
+    local version_widget =
+        TextWidget:new{
+            text =
+                string.format(
+                    _("Version %s"),
+                    self.version
+                ),
+
+            face =
+                version_face,
+        }
+
+
+    local divider =
+        LineWidget:new{
+            background =
+                Blitbuffer.COLOR_DARK_GRAY,
+
+            dimen =
+                Geom:new{
+                    w =
+                        content_width,
+
+                    h =
+                        Screen:scaleBySize(1),
+                },
+        }
+
+
+    local description_widget =
+        TextBoxWidget:new{
+            text =
+                _(
+                    "A custom KOReader reading dashboard for progress, reading statistics, and easy plugin updates."
+                ),
+
+            face =
+                body_face,
+
+            width =
+                content_width,
+
+            alignment =
+                "center",
+        }
+
+
+    local github_label =
+        TextWidget:new{
+            text =
+                _("GitHub"),
+
+            face =
+                small_face,
+
+            bold = true,
+        }
+
+
+    local github_widget =
+        TextBoxWidget:new{
+            text =
+                "jennyo88/koreader-plugins",
+
+            face =
+                body_face,
+
+            width =
+                content_width,
+
+            alignment =
+                "center",
+        }
+
+
+    local close_hint =
+        TextWidget:new{
+            text =
+                _("Tap to close"),
+
+            face =
+                small_face,
+
+            fgcolor =
+                Blitbuffer.COLOR_DARK_GRAY,
+        }
+
+
+    local content =
+        VerticalGroup:new{
+
+            align =
+                "center",
+
+            title_widget,
+
+            VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(10),
+            },
+
+            version_widget,
+
+            VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(18),
+            },
+
+            divider,
+
+            VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(18),
+            },
+
+            description_widget,
+
+            VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(24),
+            },
+
+            github_label,
+
+            VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(6),
+            },
+
+            github_widget,
+
+            VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(24),
+            },
+
+            close_hint,
+        }
+
+
+    local card =
+        FrameContainer:new{
+
+            padding =
+                Screen:scaleBySize(24),
+
+            bordersize =
+                Screen:scaleBySize(2),
+
+            radius =
+                Size.radius.window,
+
+            background =
+                Blitbuffer.COLOR_WHITE,
+
+            content,
+        }
+
+
+    self.card =
+        card
+
+
+    self[1] =
+        CenterContainer:new{
+            dimen =
+                Screen:getSize(),
+
+            card,
+        }
+
+
+    self.ges_events.Tap = {
+        GestureRange:new{
+            ges =
+                "tap",
+
+            range =
+                Geom:new{
+                    x = 0,
+                    y = 0,
+
+                    w =
+                        Screen:getWidth(),
+
+                    h =
+                        Screen:getHeight(),
+                },
+        },
+    }
+end
+
+
+function AboutDialog:onTap()
+
+    UIManager:close(self)
+
+    return true
+end
+
+
+function AboutDialog:onShow()
+
+    UIManager:setDirty(
+        self,
+
+        function()
+            return
+                "flashui",
+                self.card.dimen
+        end
+    )
+end
+
+
+function AboutDialog:onCloseWidget()
+
+    UIManager:setDirty(
+        nil,
+
+        function()
+            return
+                "ui",
+                self.card.dimen
+        end
+    )
+end
+
+
+-- ---------------------------------------------------------
 -- Plugin
 -- ---------------------------------------------------------
 
@@ -724,8 +1003,6 @@ local ReadingDashboard =
         name =
             "readingdashboard",
 
-        -- Makes the plugin available in the file browser
-        -- as well as while reading.
         is_doc_only =
             false,
     }
@@ -1113,6 +1390,24 @@ end
 
 
 -- ---------------------------------------------------------
+-- Show About
+-- ---------------------------------------------------------
+
+function ReadingDashboard:showAbout()
+
+    local dialog =
+        AboutDialog:new{
+            version =
+                PLUGIN_VERSION,
+        }
+
+    UIManager:show(
+        dialog
+    )
+end
+
+
+-- ---------------------------------------------------------
 -- Main menu
 -- ---------------------------------------------------------
 
@@ -1188,19 +1483,7 @@ function ReadingDashboard:addToMainMenu(
 
                 callback =
                     function()
-
-                        UIManager:show(
-                            InfoMessage:new{
-
-                                text =
-                                    "Reading Dashboard"
-                                    .. "\n\n"
-                                    .. "Version "
-                                    .. PLUGIN_VERSION
-                                    .. "\n\n"
-                                    .. "github.com/jennyo88/koreader-plugins",
-                            }
-                        )
+                        self:showAbout()
                     end,
             },
         },
