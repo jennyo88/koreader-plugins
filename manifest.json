@@ -2,7 +2,7 @@
   "plugins": {
     "readingdashboard": {
       "name": "Reading Dashboard",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "description": "Custom reading dashboard and quick-reading menu for KOReader.",
       "files": [
         "_meta.lua",
