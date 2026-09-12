@@ -1,49 +1,21 @@
 # KOReader Reading Dashboard
 
-A compact reading dashboard for KOReader that shows progress and reading statistics for the current book.
+A custom KOReader reading dashboard with a clean e-ink-friendly interface.
 
 ## Version
 
-`0.2.0`
+`0.3.0`
 
 ## Current features
 
-- Shows the current book title
-- Shows reading progress as a percentage
-- Shows current page and total page count
-- Shows pages remaining
-- Shows total time spent reading the book
-- Shows average reading time per page
-- Shows estimated time remaining for the **entire book**
-
-## Example
-
-```text
-The Picture of Dorian Gray
-
-PROGRESS
-8%  •  Page 25 of 311
-286 pages remaining
-
-READING
-Time read          25m 42s
-Avg. per page       1m 17s
-Time remaining      6h 07m
-```
-
-## Time remaining
-
-`Time remaining` is an estimate for finishing the **entire book**.
-
-It is calculated from:
-
-```text
-average reading time per page × pages remaining
-```
-
-It is not the same as KOReader's chapter time remaining value shown in the footer.
-
-Because the estimate is based on your recorded average reading speed, it should become more representative as more reading statistics are collected.
+- Reading percentage
+- Visual progress bar
+- Current page / total pages
+- Pages remaining
+- Total reading time
+- Average time per page
+- Estimated time remaining for the entire book
+- Custom Kindle-friendly dashboard UI
 
 ## Repository structure
 
