@@ -4,11 +4,17 @@ local lfs = require("libs/libkoreader-lfs")
 
 local Library = {}
 
-Library.extensions = { epub = true }
+Library.extensions = {
+    epub = true,
+}
 
 local ignored_names = {
-    ["."] = true, [".."] = true, [".adds"] = true,
-    [".git"] = true, ["koreader"] = true, ["system"] = true,
+    ["."] = true,
+    [".."] = true,
+    [".adds"] = true,
+    [".git"] = true,
+    ["koreader"] = true,
+    ["system"] = true,
 }
 
 local function basename(path)
@@ -25,15 +31,26 @@ local function extension(path)
 end
 
 local function is_dir(path)
-    local a = lfs.attributes(path)
-    return a and a.mode == "directory"
+    local attr = lfs.attributes(path)
+    return attr and attr.mode == "directory"
 end
 
 local function should_ignore_dir(path)
     local name = basename(path)
-    return ignored_names[name]
-        or name:sub(1, 1) == "."
-        or name:match("%.sdr$") ~= nil
+
+    if ignored_names[name] then
+        return true
+    end
+
+    if name:sub(1, 1) == "." then
+        return true
+    end
+
+    if name:match("%.sdr$") then
+        return true
+    end
+
+    return false
 end
 
 local function supported(path)
@@ -42,9 +59,10 @@ local function supported(path)
 end
 
 function Library:getDefaultRoot()
-    if is_dir("/mnt/us/documents") then
-        return "/mnt/us/documents"
+    if is_dir("/mnt/us/koreader/books") then
+        return "/mnt/us/koreader/books"
     end
+
     return "/mnt/us"
 end
 
@@ -65,6 +83,7 @@ function Library:getBookStatus(file)
 
     if settings_ok and settings then
         local summary = settings:readSetting("summary")
+
         if summary and summary.status then
             return summary.status
         end
@@ -125,6 +144,7 @@ function Library:getMetadata(file)
     end
 
     local props = settings:readSetting("doc_props") or {}
+
     book.title = props.title
     book.authors = props.authors
     book.series = props.series
@@ -166,6 +186,7 @@ function Library:getCandidates(root)
     root = root or self:getDefaultRoot()
 
     local books = {}
+
     for _, file in ipairs(self:scanDirectory(root)) do
         if not self:isFinished(file) then
             table.insert(books, self:getMetadata(file))
@@ -179,6 +200,42 @@ function Library:getCandidates(root)
     end)
 
     return books
+end
+
+function Library:getUnopenedBooks(root)
+    local out = {}
+
+    for _, book in ipairs(self:getCandidates(root)) do
+        if not book.been_opened then
+            table.insert(out, book)
+        end
+    end
+
+    return out
+end
+
+function Library:getStartedBooks(root)
+    local out = {}
+
+    for _, book in ipairs(self:getCandidates(root)) do
+        if book.been_opened and book.status ~= "complete" then
+            table.insert(out, book)
+        end
+    end
+
+    return out
+end
+
+function Library:getSeriesBooks(root)
+    local out = {}
+
+    for _, book in ipairs(self:getCandidates(root)) do
+        if book.series and book.series ~= "" then
+            table.insert(out, book)
+        end
+    end
+
+    return out
 end
 
 return Library
