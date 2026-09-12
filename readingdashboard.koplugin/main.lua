@@ -1,4 +1,4 @@
-local PLUGIN_VERSION = "0.5.1"
+local PLUGIN_VERSION = "0.5.2"
 
 local Blitbuffer = require("ffi/blitbuffer")
 local CenterContainer = require("ui/widget/container/centercontainer")
