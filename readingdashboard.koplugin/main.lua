@@ -1,4 +1,4 @@
-local PLUGIN_VERSION = "0.5.0"
+local PLUGIN_VERSION = "0.5.1"
 
 local Blitbuffer = require("ffi/blitbuffer")
 local CenterContainer = require("ui/widget/container/centercontainer")
@@ -35,14 +35,14 @@ if source:sub(1, 1) == "@" then
     source = source:sub(2)
 end
 
-local plugin_dir = source:match("(.+)/[^/]+$")
+local plugin_dir =
+    source:match("(.+)/[^/]+$")
 
--- KOReader may report plugin paths relative to /mnt/us/koreader.
 if plugin_dir and plugin_dir:sub(1, 1) ~= "/" then
-    plugin_dir = "/mnt/us/koreader/" .. plugin_dir
+    plugin_dir =
+        "/mnt/us/koreader/" .. plugin_dir
 end
 
--- Final fallback for Kindle.
 if not plugin_dir then
     plugin_dir =
         "/mnt/us/koreader/plugins/readingdashboard.koplugin"
@@ -50,10 +50,12 @@ end
 
 
 local function loadUpdater()
+
     local updater_path =
         plugin_dir .. "/updater.lua"
 
-    local file = io.open(updater_path, "r")
+    local file =
+        io.open(updater_path, "r")
 
     if not file then
         UIManager:show(
@@ -98,7 +100,9 @@ end
 -- ---------------------------------------------------------
 
 local function safe_call(fn, default)
-    local ok, value = pcall(fn)
+
+    local ok, value =
+        pcall(fn)
 
     if ok and value ~= nil then
         return value
@@ -109,6 +113,7 @@ end
 
 
 local function percent(value)
+
     if type(value) ~= "number" then
         return nil
     end
@@ -122,11 +127,13 @@ end
 
 
 local function formatTime(seconds)
+
     if type(seconds) ~= "number" then
         return nil
     end
 
-    seconds = math.floor(seconds + 0.5)
+    seconds =
+        math.floor(seconds + 0.5)
 
     local hours =
         math.floor(seconds / 3600)
@@ -196,8 +203,7 @@ function ProgressBar:init()
         )
 
     local empty_width =
-        inner_width
-        - filled_width
+        inner_width - filled_width
 
     local group =
         HorizontalGroup:new{}
@@ -263,7 +269,6 @@ local DashboardDialog =
     InputContainer:extend{
 
         title = "",
-
         percentage = 0,
 
         current_page = nil,
@@ -290,10 +295,6 @@ function DashboardDialog:init()
         card_width
         - Screen:scaleBySize(48)
 
-
-    -- -----------------------------------------------------
-    -- Fonts
-    -- -----------------------------------------------------
 
     local title_face =
         Font:getFace(
@@ -326,9 +327,7 @@ function DashboardDialog:init()
         )
 
 
-    -- -----------------------------------------------------
     -- Book title
-    -- -----------------------------------------------------
 
     local title_widget =
         TextBoxWidget:new{
@@ -347,9 +346,7 @@ function DashboardDialog:init()
         }
 
 
-    -- -----------------------------------------------------
     -- Percentage
-    -- -----------------------------------------------------
 
     local percentage_widget =
         TextWidget:new{
@@ -366,13 +363,10 @@ function DashboardDialog:init()
         }
 
 
-    -- -----------------------------------------------------
     -- Progress bar
-    -- -----------------------------------------------------
 
     local progress_bar =
         ProgressBar:new{
-
             percentage =
                 self.percentage or 0,
 
@@ -386,9 +380,7 @@ function DashboardDialog:init()
         }
 
 
-    -- -----------------------------------------------------
-    -- Page information
-    -- -----------------------------------------------------
+    -- Page info
 
     local page_text = ""
 
@@ -435,9 +427,7 @@ function DashboardDialog:init()
         }
 
 
-    -- -----------------------------------------------------
     -- Stat row helper
-    -- -----------------------------------------------------
 
     local function statRow(
         label,
@@ -471,7 +461,6 @@ function DashboardDialog:init()
             - label_widget:getSize().w
             - value_widget:getSize().w
 
-
         if spacing < 0 then
             spacing = 0
         end
@@ -492,9 +481,7 @@ function DashboardDialog:init()
     end
 
 
-    -- -----------------------------------------------------
     -- Reading section
-    -- -----------------------------------------------------
 
     local reading_header =
         TextWidget:new{
@@ -545,10 +532,6 @@ function DashboardDialog:init()
         )
 
 
-    -- -----------------------------------------------------
-    -- Tap hint
-    -- -----------------------------------------------------
-
     local close_hint =
         TextWidget:new{
             text =
@@ -561,10 +544,6 @@ function DashboardDialog:init()
                 Blitbuffer.COLOR_DARK_GRAY,
         }
 
-
-    -- -----------------------------------------------------
-    -- Main layout
-    -- -----------------------------------------------------
 
     local content =
         VerticalGroup:new{
@@ -671,15 +650,12 @@ function DashboardDialog:init()
 
     self[1] =
         CenterContainer:new{
-
             dimen =
                 Screen:getSize(),
 
             card,
         }
 
-
-    -- Tap anywhere to close.
 
     self.ges_events.Tap = {
         GestureRange:new{
@@ -704,9 +680,7 @@ end
 
 function DashboardDialog:onTap()
 
-    UIManager:close(
-        self
-    )
+    UIManager:close(self)
 
     return true
 end
@@ -750,9 +724,34 @@ local ReadingDashboard =
         name =
             "readingdashboard",
 
+        -- Makes the plugin available in the file browser
+        -- as well as while reading.
         is_doc_only =
-            true,
+            false,
     }
+
+
+-- ---------------------------------------------------------
+-- Document state
+-- ---------------------------------------------------------
+
+function ReadingDashboard:isDocumentOpen()
+
+    return self.ui
+        and self.ui.document
+        and type(self.ui.getCurrentPage) == "function"
+end
+
+
+function ReadingDashboard:showNoDocumentMessage()
+
+    UIManager:show(
+        InfoMessage:new{
+            text =
+                _("Open a book to view the Reading Dashboard."),
+        }
+    )
+end
 
 
 -- ---------------------------------------------------------
@@ -806,7 +805,11 @@ end
 
 function ReadingDashboard:onOpenReadingDashboard()
 
-    self:showDashboard()
+    if self:isDocumentOpen() then
+        self:showDashboard()
+    else
+        self:showNoDocumentMessage()
+    end
 
     return true
 end
@@ -873,6 +876,11 @@ end
 
 function ReadingDashboard:getProgress()
 
+    if not self:isDocumentOpen() then
+        return {}
+    end
+
+
     local current_page =
         safe_call(
             function()
@@ -913,7 +921,6 @@ function ReadingDashboard:getProgress()
                 math.max(
                     page_count
                     - current_page,
-
                     0
                 ),
         }
@@ -929,6 +936,11 @@ end
 -- ---------------------------------------------------------
 
 function ReadingDashboard:getStatistics()
+
+    if not self:isDocumentOpen() then
+        return {}
+    end
+
 
     local stats =
         self.ui
@@ -1013,6 +1025,12 @@ end
 -- ---------------------------------------------------------
 
 function ReadingDashboard:showDashboard()
+
+    if not self:isDocumentOpen() then
+        self:showNoDocumentMessage()
+        return
+    end
+
 
     local title =
         self:getBookTitle()
@@ -1118,7 +1136,12 @@ function ReadingDashboard:addToMainMenu(
 
                 callback =
                     function()
-                        self:showDashboard()
+
+                        if self:isDocumentOpen() then
+                            self:showDashboard()
+                        else
+                            self:showNoDocumentMessage()
+                        end
                     end,
             },
 
@@ -1127,16 +1150,18 @@ function ReadingDashboard:addToMainMenu(
                 text =
                     _("Check for Updates"),
 
+                callback =
+                    function()
 
-                callback = function()
-                    local Updater = loadUpdater()
+                        local Updater =
+                            loadUpdater()
 
-                    if Updater then
-                        Updater:checkForUpdates(
-                            PLUGIN_VERSION
-                        )
-                    end
-                end,
+                        if Updater then
+                            Updater:checkForUpdates(
+                                PLUGIN_VERSION
+                            )
+                        end
+                    end,
             },
 
 
@@ -1144,13 +1169,16 @@ function ReadingDashboard:addToMainMenu(
                 text =
                     _("Restore Previous Version"),
 
-                callback = function()
-                    local Updater = loadUpdater()
+                callback =
+                    function()
 
-                    if Updater then
-                        Updater:confirmRestore()
-                    end
-                end,
+                        local Updater =
+                            loadUpdater()
+
+                        if Updater then
+                            Updater:confirmRestore()
+                        end
+                    end,
             },
 
 
