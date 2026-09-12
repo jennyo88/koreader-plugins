@@ -9,6 +9,19 @@
         "main.lua",
         "updater.lua"
       ]
+    },
+
+    "tbrrecommender": {
+      "name": "TBR Recommender",
+      "version": "0.1.1",
+      "description": "Recommends unread books already on your Kindle.",
+      "files": [
+        "_meta.lua",
+        "main.lua",
+        "library.lua",
+        "recommender.lua",
+        "updater.lua"
+      ]
     }
   }
 }
