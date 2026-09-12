@@ -1,16 +1,18 @@
 local PLUGIN_VERSION = "0.5.0"
+
 local Blitbuffer = require("ffi/blitbuffer")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
+local Dispatcher = require("dispatcher")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
+local InfoMessage = require("ui/widget/infomessage")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local LineWidget = require("ui/widget/linewidget")
-local RightContainer = require("ui/widget/container/rightcontainer")
 local Size = require("ui/size")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
@@ -20,10 +22,28 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
-local Dispatcher = require("dispatcher")
-local Updater = require("updater")
-
 local Screen = Device.screen
+
+
+-- ---------------------------------------------------------
+-- Locate plugin directory
+-- ---------------------------------------------------------
+
+local source =
+    debug.getinfo(1, "S").source
+
+local plugin_dir =
+    source:match("^@(.+)/[^/]+$")
+
+if not plugin_dir then
+    plugin_dir =
+        "/mnt/us/koreader/plugins/readingdashboard.koplugin"
+end
+
+local Updater =
+    dofile(
+        plugin_dir .. "/updater.lua"
+    )
 
 
 -- ---------------------------------------------------------
@@ -61,16 +81,36 @@ local function formatTime(seconds)
 
     seconds = math.floor(seconds + 0.5)
 
-    local hours = math.floor(seconds / 3600)
-    local minutes = math.floor((seconds % 3600) / 60)
-    local secs = seconds % 60
+    local hours =
+        math.floor(seconds / 3600)
+
+    local minutes =
+        math.floor(
+            (seconds % 3600) / 60
+        )
+
+    local secs =
+        seconds % 60
 
     if hours > 0 then
-        return string.format("%dh %02dm", hours, minutes)
+        return string.format(
+            "%dh %02dm",
+            hours,
+            minutes
+        )
+
     elseif minutes > 0 then
-        return string.format("%dm %02ds", minutes, secs)
+        return string.format(
+            "%dm %02ds",
+            minutes,
+            secs
+        )
+
     else
-        return string.format("%ds", secs)
+        return string.format(
+            "%ds",
+            secs
+        )
     end
 end
 
@@ -79,61 +119,92 @@ end
 -- Progress bar
 -- ---------------------------------------------------------
 
-local ProgressBar = WidgetContainer:extend{
-    percentage = 0,
-    width = 300,
-    height = 12,
-}
+local ProgressBar =
+    WidgetContainer:extend{
+        percentage = 0,
+        width = 300,
+        height = 12,
+    }
 
 
 function ProgressBar:init()
-    local progress = math.max(
-        0,
-        math.min(self.percentage or 0, 100)
-    )
 
-    local inner_width = self.width - 4
+    local progress =
+        math.max(
+            0,
+            math.min(
+                self.percentage or 0,
+                100
+            )
+        )
 
-    local filled_width = math.floor(
-        inner_width * progress / 100
-    )
+    local inner_width =
+        self.width - 4
 
-    local empty_width = inner_width - filled_width
+    local filled_width =
+        math.floor(
+            inner_width
+            * progress
+            / 100
+        )
 
-    local group = HorizontalGroup:new{}
+    local empty_width =
+        inner_width
+        - filled_width
+
+    local group =
+        HorizontalGroup:new{}
+
 
     if filled_width > 0 then
         table.insert(
             group,
+
             LineWidget:new{
-                background = Blitbuffer.COLOR_BLACK,
-                dimen = Geom:new{
-                    w = filled_width,
-                    h = self.height - 4,
-                },
+                background =
+                    Blitbuffer.COLOR_BLACK,
+
+                dimen =
+                    Geom:new{
+                        w = filled_width,
+                        h = self.height - 4,
+                    },
             }
         )
     end
+
 
     if empty_width > 0 then
         table.insert(
             group,
+
             LineWidget:new{
-                background = Blitbuffer.COLOR_LIGHT_GRAY,
-                dimen = Geom:new{
-                    w = empty_width,
-                    h = self.height - 4,
-                },
+                background =
+                    Blitbuffer.COLOR_LIGHT_GRAY,
+
+                dimen =
+                    Geom:new{
+                        w = empty_width,
+                        h = self.height - 4,
+                    },
             }
         )
     end
 
-    self[1] = FrameContainer:new{
-        bordersize = Screen:scaleBySize(1),
-        padding = Screen:scaleBySize(1),
-        background = Blitbuffer.COLOR_WHITE,
-        group,
-    }
+
+    self[1] =
+        FrameContainer:new{
+            bordersize =
+                Screen:scaleBySize(1),
+
+            padding =
+                Screen:scaleBySize(1),
+
+            background =
+                Blitbuffer.COLOR_WHITE,
+
+            group,
+        }
 end
 
 
@@ -141,44 +212,71 @@ end
 -- Dashboard popup
 -- ---------------------------------------------------------
 
-local DashboardDialog = InputContainer:extend{
-    title = "",
-    percentage = 0,
+local DashboardDialog =
+    InputContainer:extend{
 
-    current_page = nil,
-    page_count = nil,
-    pages_remaining = nil,
+        title = "",
 
-    time_read = nil,
-    average_time = nil,
-    time_remaining = nil,
-}
+        percentage = 0,
+
+        current_page = nil,
+        page_count = nil,
+        pages_remaining = nil,
+
+        time_read = nil,
+        average_time = nil,
+        time_remaining = nil,
+    }
 
 
 function DashboardDialog:init()
-    local screen_width = Screen:getWidth()
 
-    local card_width = math.floor(
-        screen_width * 0.82
-    )
+    local screen_width =
+        Screen:getWidth()
+
+    local card_width =
+        math.floor(
+            screen_width * 0.82
+        )
 
     local content_width =
-        card_width - Screen:scaleBySize(48)
+        card_width
+        - Screen:scaleBySize(48)
+
+
+    -- -----------------------------------------------------
+    -- Fonts
+    -- -----------------------------------------------------
 
     local title_face =
-        Font:getFace("cfont", 24)
+        Font:getFace(
+            "cfont",
+            24
+        )
 
     local percent_face =
-        Font:getFace("cfont", 44)
+        Font:getFace(
+            "cfont",
+            44
+        )
 
     local section_face =
-        Font:getFace("cfont", 16)
+        Font:getFace(
+            "cfont",
+            16
+        )
 
     local stat_face =
-        Font:getFace("cfont", 18)
+        Font:getFace(
+            "cfont",
+            18
+        )
 
     local small_face =
-        Font:getFace("cfont", 15)
+        Font:getFace(
+            "cfont",
+            15
+        )
 
 
     -- -----------------------------------------------------
@@ -188,9 +286,16 @@ function DashboardDialog:init()
     local title_widget =
         TextBoxWidget:new{
             text = self.title,
-            face = title_face,
-            width = content_width,
-            alignment = "center",
+
+            face =
+                title_face,
+
+            width =
+                content_width,
+
+            alignment =
+                "center",
+
             bold = true,
         }
 
@@ -201,11 +306,15 @@ function DashboardDialog:init()
 
     local percentage_widget =
         TextWidget:new{
-            text = string.format(
-                "%d%%",
-                self.percentage or 0
-            ),
-            face = percent_face,
+            text =
+                string.format(
+                    "%d%%",
+                    self.percentage or 0
+                ),
+
+            face =
+                percent_face,
+
             bold = true,
         }
 
@@ -216,12 +325,14 @@ function DashboardDialog:init()
 
     local progress_bar =
         ProgressBar:new{
+
             percentage =
                 self.percentage or 0,
 
-            width = math.floor(
-                content_width * 0.82
-            ),
+            width =
+                math.floor(
+                    content_width * 0.82
+                ),
 
             height =
                 Screen:scaleBySize(14),
@@ -234,7 +345,9 @@ function DashboardDialog:init()
 
     local page_text = ""
 
-    if self.current_page and self.page_count then
+    if self.current_page
+        and self.page_count then
+
         page_text =
             string.format(
                 _("Page %d of %d"),
@@ -246,8 +359,11 @@ function DashboardDialog:init()
 
     local page_widget =
         TextWidget:new{
-            text = page_text,
-            face = small_face,
+            text =
+                page_text,
+
+            face =
+                small_face,
         }
 
 
@@ -264,8 +380,11 @@ function DashboardDialog:init()
 
     local remaining_widget =
         TextWidget:new{
-            text = remaining_text,
-            face = small_face,
+            text =
+                remaining_text,
+
+            face =
+                small_face,
         }
 
 
@@ -273,34 +392,56 @@ function DashboardDialog:init()
     -- Stat row helper
     -- -----------------------------------------------------
 
-    local function statRow(label, value)
+    local function statRow(
+        label,
+        value
+    )
 
         local label_widget =
             TextWidget:new{
-                text = label,
-                face = stat_face,
+                text =
+                    label,
+
+                face =
+                    stat_face,
             }
+
 
         local value_widget =
             TextWidget:new{
-                text = value or "—",
-                face = stat_face,
+                text =
+                    value or "—",
+
+                face =
+                    stat_face,
+
                 bold = true,
             }
 
-        return HorizontalGroup:new{
 
-            label_widget,
+        local spacing =
+            content_width
+            - label_widget:getSize().w
+            - value_widget:getSize().w
 
-            HorizontalSpan:new{
-                width =
-                    content_width
-                    - label_widget:getSize().w
-                    - value_widget:getSize().w
-            },
 
-            value_widget,
-        }
+        if spacing < 0 then
+            spacing = 0
+        end
+
+
+        return
+            HorizontalGroup:new{
+
+                label_widget,
+
+                HorizontalSpan:new{
+                    width =
+                        spacing,
+                },
+
+                value_widget,
+            }
     end
 
 
@@ -310,8 +451,12 @@ function DashboardDialog:init()
 
     local reading_header =
         TextWidget:new{
-            text = _("READING"),
-            face = section_face,
+            text =
+                _("READING"),
+
+            face =
+                section_face,
+
             bold = true,
         }
 
@@ -321,10 +466,14 @@ function DashboardDialog:init()
             background =
                 Blitbuffer.COLOR_DARK_GRAY,
 
-            dimen = Geom:new{
-                w = content_width,
-                h = Screen:scaleBySize(1),
-            },
+            dimen =
+                Geom:new{
+                    w =
+                        content_width,
+
+                    h =
+                        Screen:scaleBySize(1),
+                },
         }
 
 
@@ -355,8 +504,12 @@ function DashboardDialog:init()
 
     local close_hint =
         TextWidget:new{
-            text = _("Tap to close"),
-            face = small_face,
+            text =
+                _("Tap to close"),
+
+            face =
+                small_face,
+
             fgcolor =
                 Blitbuffer.COLOR_DARK_GRAY,
         }
@@ -368,66 +521,78 @@ function DashboardDialog:init()
 
     local content =
         VerticalGroup:new{
-            align = "center",
+
+            align =
+                "center",
 
             title_widget,
 
             VerticalSpan:new{
-                width = Screen:scaleBySize(22),
+                width =
+                    Screen:scaleBySize(22),
             },
 
             percentage_widget,
 
             VerticalSpan:new{
-                width = Screen:scaleBySize(12),
+                width =
+                    Screen:scaleBySize(12),
             },
 
             progress_bar,
 
             VerticalSpan:new{
-                width = Screen:scaleBySize(10),
+                width =
+                    Screen:scaleBySize(10),
             },
 
             page_widget,
 
             VerticalSpan:new{
-                width = Screen:scaleBySize(4),
+                width =
+                    Screen:scaleBySize(4),
             },
 
             remaining_widget,
 
             VerticalSpan:new{
-                width = Screen:scaleBySize(28),
+                width =
+                    Screen:scaleBySize(28),
             },
 
             reading_header,
 
             VerticalSpan:new{
-                width = Screen:scaleBySize(6),
+                width =
+                    Screen:scaleBySize(6),
             },
 
             divider,
 
             VerticalSpan:new{
-                width = Screen:scaleBySize(14),
+                width =
+                    Screen:scaleBySize(14),
             },
 
             time_read_row,
 
             VerticalSpan:new{
-                width = Screen:scaleBySize(10),
+                width =
+                    Screen:scaleBySize(10),
             },
 
             average_row,
 
             VerticalSpan:new{
-                width = Screen:scaleBySize(10),
+                width =
+                    Screen:scaleBySize(10),
             },
 
             remaining_row,
 
             VerticalSpan:new{
-                width = Screen:scaleBySize(24),
+                width =
+                    Screen:scaleBySize(24),
             },
 
             close_hint,
@@ -436,6 +601,7 @@ function DashboardDialog:init()
 
     local card =
         FrameContainer:new{
+
             padding =
                 Screen:scaleBySize(24),
 
@@ -452,11 +618,13 @@ function DashboardDialog:init()
         }
 
 
-    self.card = card
+    self.card =
+        card
 
 
     self[1] =
         CenterContainer:new{
+
             dimen =
                 Screen:getSize(),
 
@@ -468,30 +636,43 @@ function DashboardDialog:init()
 
     self.ges_events.Tap = {
         GestureRange:new{
-            ges = "tap",
+            ges =
+                "tap",
 
-            range = Geom:new{
-                x = 0,
-                y = 0,
-                w = Screen:getWidth(),
-                h = Screen:getHeight(),
-            },
+            range =
+                Geom:new{
+                    x = 0,
+                    y = 0,
+
+                    w =
+                        Screen:getWidth(),
+
+                    h =
+                        Screen:getHeight(),
+                },
         },
     }
 end
 
 
 function DashboardDialog:onTap()
-    UIManager:close(self)
+
+    UIManager:close(
+        self
+    )
+
     return true
 end
 
 
 function DashboardDialog:onShow()
+
     UIManager:setDirty(
         self,
+
         function()
-            return "flashui",
+            return
+                "flashui",
                 self.card.dimen
         end
     )
@@ -499,10 +680,13 @@ end
 
 
 function DashboardDialog:onCloseWidget()
+
     UIManager:setDirty(
         nil,
+
         function()
-            return "ui",
+            return
+                "ui",
                 self.card.dimen
         end
     )
@@ -515,79 +699,149 @@ end
 
 local ReadingDashboard =
     WidgetContainer:extend{
-        name = "readingdashboard",
-        is_doc_only = true,
+
+        name =
+            "readingdashboard",
+
+        is_doc_only =
+            true,
     }
 
 
+-- ---------------------------------------------------------
+-- Dispatcher action
+-- ---------------------------------------------------------
+
+function ReadingDashboard:onDispatcherRegisterActions()
+
+    Dispatcher:registerAction(
+
+        "reading_dashboard_open",
+
+        {
+            category =
+                "none",
+
+            event =
+                "OpenReadingDashboard",
+
+            title =
+                _("Open Reading Dashboard"),
+
+            general =
+                true,
+        }
+    )
+end
+
+
+-- ---------------------------------------------------------
+-- Init
+-- ---------------------------------------------------------
+
 function ReadingDashboard:init()
+
     self:onDispatcherRegisterActions()
 
-    if self.ui and self.ui.menu then
-        self.ui.menu:registerToMainMenu(self)
+    if self.ui
+        and self.ui.menu then
+
+        self.ui.menu:registerToMainMenu(
+            self
+        )
     end
 end
 
+
+-- ---------------------------------------------------------
+-- Gesture / dispatcher handler
+-- ---------------------------------------------------------
+
 function ReadingDashboard:onOpenReadingDashboard()
+
     self:showDashboard()
+
     return true
 end
+
+
+-- ---------------------------------------------------------
+-- Book title
+-- ---------------------------------------------------------
 
 function ReadingDashboard:getBookTitle()
 
     local title =
-        safe_call(function()
+        safe_call(
+            function()
 
-            if self.ui
-                and self.ui.doc_props
-                and self.ui.doc_props.display_title then
+                if self.ui
+                    and self.ui.doc_props
+                    and self.ui.doc_props.display_title then
 
-                return
-                    self.ui.doc_props.display_title
+                    return
+                        self.ui.doc_props.display_title
+                end
             end
-        end)
+        )
 
 
-    if title and title ~= "" then
+    if title
+        and title ~= "" then
+
         return title
     end
 
 
     title =
-        safe_call(function()
+        safe_call(
+            function()
 
-            if self.ui
-                and self.ui.document
-                and self.ui.document.info then
+                if self.ui
+                    and self.ui.document
+                    and self.ui.document.info then
 
-                return
-                    self.ui.document.info.title
+                    return
+                        self.ui.document.info.title
+                end
             end
-        end)
+        )
 
 
-    if title and title ~= "" then
+    if title
+        and title ~= "" then
+
         return title
     end
 
 
-    return _("Current book")
+    return
+        _("Current book")
 end
 
+
+-- ---------------------------------------------------------
+-- Reading progress
+-- ---------------------------------------------------------
 
 function ReadingDashboard:getProgress()
 
     local current_page =
-        safe_call(function()
-            return self.ui:getCurrentPage()
-        end)
+        safe_call(
+            function()
+                return
+                    self.ui:getCurrentPage()
+            end
+        )
 
 
     local page_count =
-        safe_call(function()
-            return
-                self.ui.document:getPageCount()
-        end)
+        safe_call(
+            function()
+                return
+                    self.ui.document:getPageCount()
+            end
+        )
 
 
     if type(current_page) == "number"
@@ -595,6 +849,7 @@ function ReadingDashboard:getProgress()
         and page_count > 0 then
 
         return {
+
             current_page =
                 current_page,
 
@@ -603,12 +858,15 @@ function ReadingDashboard:getProgress()
 
             percentage =
                 percent(
-                    current_page / page_count
+                    current_page
+                    / page_count
                 ),
 
             pages_remaining =
                 math.max(
-                    page_count - current_page,
+                    page_count
+                    - current_page,
+
                     0
                 ),
         }
@@ -618,6 +876,10 @@ function ReadingDashboard:getProgress()
     return {}
 end
 
+
+-- ---------------------------------------------------------
+-- Reading statistics
+-- ---------------------------------------------------------
 
 function ReadingDashboard:getStatistics()
 
@@ -686,6 +948,7 @@ function ReadingDashboard:getStatistics()
 
 
     return {
+
         book_read_time =
             book_read_time,
 
@@ -697,6 +960,10 @@ function ReadingDashboard:getStatistics()
     }
 end
 
+
+-- ---------------------------------------------------------
+-- Show dashboard
+-- ---------------------------------------------------------
 
 function ReadingDashboard:showDashboard()
 
@@ -747,6 +1014,7 @@ function ReadingDashboard:showDashboard()
 
     local dialog =
         DashboardDialog:new{
+
             title =
                 title,
 
@@ -773,71 +1041,90 @@ function ReadingDashboard:showDashboard()
         }
 
 
-    UIManager:show(dialog)
+    UIManager:show(
+        dialog
+    )
 end
 
-function ReadingDashboard:addToMainMenu(menu_items)
+
+-- ---------------------------------------------------------
+-- Main menu
+-- ---------------------------------------------------------
+
+function ReadingDashboard:addToMainMenu(
+    menu_items
+)
+
     menu_items.reading_dashboard = {
-        text = _("Reading Dashboard"),
-        sorting_hint = "tools",
+
+        text =
+            _("Reading Dashboard"),
+
+        sorting_hint =
+            "tools",
 
         sub_item_table = {
-            {
-                text = _("Open Dashboard"),
 
-                callback = function()
-                    self:showDashboard()
-                end,
+            {
+                text =
+                    _("Open Dashboard"),
+
+                callback =
+                    function()
+                        self:showDashboard()
+                    end,
             },
 
-            {
-                text = _("Check for Updates"),
 
-                callback = function()
-                    Updater:checkForUpdates(
-                        PLUGIN_VERSION
-                    )
-                end,
+            {
+                text =
+                    _("Check for Updates"),
+
+                callback =
+                    function()
+
+                        Updater:checkForUpdates(
+                            PLUGIN_VERSION
+                        )
+                    end,
             },
 
-            {
-                text = _("Restore Previous Version"),
 
-                callback = function()
-                    Updater:confirmRestore()
-                end,
+            {
+                text =
+                    _("Restore Previous Version"),
+
+                callback =
+                    function()
+
+                        Updater:confirmRestore()
+                    end,
             },
 
-            {
-                text = _("About"),
 
-                callback = function()
-                    UIManager:show(
-                        InfoMessage:new{
-                            text =
-                                "Reading Dashboard\n\n"
-                                .. "Version "
-                                .. PLUGIN_VERSION
-                                .. "\n\n"
-                                .. "github.com/jennyo88/koreader-plugins",
-                        }
-                    )
-                end,
+            {
+                text =
+                    _("About"),
+
+                callback =
+                    function()
+
+                        UIManager:show(
+                            InfoMessage:new{
+
+                                text =
+                                    "Reading Dashboard"
+                                    .. "\n\n"
+                                    .. "Version "
+                                    .. PLUGIN_VERSION
+                                    .. "\n\n"
+                                    .. "github.com/jennyo88/koreader-plugins",
+                            }
+                        )
+                    end,
             },
         },
     }
-end
-
-function ReadingDashboard:onDispatcherRegisterActions()
-    Dispatcher:registerAction(
-        "reading_dashboard_open",
-        {
-            category = "none",
-            event = "OpenReadingDashboard",
-            title = _("Open Reading Dashboard"),
-            general = true,
-        }
-    )
 end
 
 
