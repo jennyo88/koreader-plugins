@@ -1,3 +1,4 @@
+local PLUGIN_VERSION = "0.5.0"
 local Blitbuffer = require("ffi/blitbuffer")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
@@ -20,6 +21,7 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
 local Dispatcher = require("dispatcher")
+local Updater = require("updater")
 
 local Screen = Device.screen
 
@@ -774,21 +776,55 @@ function ReadingDashboard:showDashboard()
     UIManager:show(dialog)
 end
 
-function ReadingDashboard:addToMainMenu(
-    menu_items
-)
-
+function ReadingDashboard:addToMainMenu(menu_items)
     menu_items.reading_dashboard = {
-        text =
-            _("Reading Dashboard"),
+        text = _("Reading Dashboard"),
+        sorting_hint = "tools",
 
-        sorting_hint =
-            "tools",
+        sub_item_table = {
+            {
+                text = _("Open Dashboard"),
 
-        callback =
-            function()
-                self:showDashboard()
-            end,
+                callback = function()
+                    self:showDashboard()
+                end,
+            },
+
+            {
+                text = _("Check for Updates"),
+
+                callback = function()
+                    Updater:checkForUpdates(
+                        PLUGIN_VERSION
+                    )
+                end,
+            },
+
+            {
+                text = _("Restore Previous Version"),
+
+                callback = function()
+                    Updater:confirmRestore()
+                end,
+            },
+
+            {
+                text = _("About"),
+
+                callback = function()
+                    UIManager:show(
+                        InfoMessage:new{
+                            text =
+                                "Reading Dashboard\n\n"
+                                .. "Version "
+                                .. PLUGIN_VERSION
+                                .. "\n\n"
+                                .. "github.com/jennyo88/koreader-plugins",
+                        }
+                    )
+                end,
+            },
+        },
     }
 end
 
