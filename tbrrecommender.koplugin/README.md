@@ -8,4 +8,4 @@ Modes:
 - Continue a Series
 - Unopened Books
 
-This first version scans EPUBs in `/mnt/us/documents`, excludes books marked complete by KOReader, and shows three recommendations.
+This first version scans EPUBs in `/mnt/us/koreader/books`, excludes books marked complete by KOReader, and shows three recommendations.
