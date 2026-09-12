@@ -202,40 +202,4 @@ function Library:getCandidates(root)
     return books
 end
 
-function Library:getUnopenedBooks(root)
-    local out = {}
-
-    for _, book in ipairs(self:getCandidates(root)) do
-        if not book.been_opened then
-            table.insert(out, book)
-        end
-    end
-
-    return out
-end
-
-function Library:getStartedBooks(root)
-    local out = {}
-
-    for _, book in ipairs(self:getCandidates(root)) do
-        if book.been_opened and book.status ~= "complete" then
-            table.insert(out, book)
-        end
-    end
-
-    return out
-end
-
-function Library:getSeriesBooks(root)
-    local out = {}
-
-    for _, book in ipairs(self:getCandidates(root)) do
-        if book.series and book.series ~= "" then
-            table.insert(out, book)
-        end
-    end
-
-    return out
-end
-
 return Library

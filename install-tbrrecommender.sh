@@ -17,14 +17,14 @@ echo
 rm -rf "$TMP"
 mkdir -p "$TMP"
 
-for FILE in _meta.lua main.lua library.lua recommender.lua; do
+for FILE in _meta.lua main.lua library.lua recommender.lua updater.lua; do
     echo "Downloading $FILE..."
     curl -fL "$BASE/$FILE" -o "$TMP/$FILE"
 done
 
 mkdir -p "$TARGET"
 
-for FILE in _meta.lua main.lua library.lua recommender.lua; do
+for FILE in _meta.lua main.lua library.lua recommender.lua updater.lua; do
     cp "$TMP/$FILE" "$TARGET/$FILE"
 done
 

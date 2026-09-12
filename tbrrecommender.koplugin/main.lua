@@ -3,7 +3,7 @@ local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
-local PLUGIN_VERSION = "0.1.0"
+local PLUGIN_VERSION = "0.1.1"
 
 local source = debug.getinfo(1, "S").source
 
@@ -27,13 +27,52 @@ local Library =
 local Recommender =
     dofile(plugin_dir .. "/recommender.lua")
 
+local function loadUpdater()
+    local updater_path =
+        plugin_dir .. "/updater.lua"
+
+    local file =
+        io.open(updater_path, "r")
+
+    if not file then
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Updater file was not found.\n\n"
+                    .. updater_path
+                    .. "\n\nRun the installer again to install updater.lua.",
+            }
+        )
+        return nil
+    end
+
+    file:close()
+
+    local ok, updater_or_error =
+        pcall(
+            dofile,
+            updater_path
+        )
+
+    if not ok then
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Updater could not be loaded.\n\n"
+                    .. tostring(updater_or_error),
+            }
+        )
+        return nil
+    end
+
+    return updater_or_error
+end
 
 local TBRRecommender =
     WidgetContainer:extend{
         name = "tbrrecommender",
         is_doc_only = false,
     }
-
 
 local function title_for(book)
     return book.title
@@ -44,7 +83,6 @@ local function title_for(book)
         or "Unknown title"
 end
 
-
 local function author_for(book)
     if type(book.authors) == "string" then
         return book.authors
@@ -54,7 +92,6 @@ local function author_for(book)
 
     return nil
 end
-
 
 local function details_for(book)
     local bits = {}
@@ -94,13 +131,11 @@ local function details_for(book)
     return table.concat(bits, " • ")
 end
 
-
 function TBRRecommender:init()
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
     end
 end
-
 
 function TBRRecommender:getBooks()
     return Library:getCandidates(
@@ -108,12 +143,10 @@ function TBRRecommender:getBooks()
     )
 end
 
-
 function TBRRecommender:showRecommendations(
     header,
     books
 )
-
     if not books or #books == 0 then
         UIManager:show(
             InfoMessage:new{
@@ -124,12 +157,10 @@ function TBRRecommender:showRecommendations(
         return
     end
 
-
     local lines = {
         header,
         "",
     }
-
 
     for i, book in ipairs(books) do
         table.insert(
@@ -152,31 +183,21 @@ function TBRRecommender:showRecommendations(
         end
 
         if i < #books then
-            table.insert(
-                lines,
-                ""
-            )
+            table.insert(lines, "")
         end
     end
-
 
     UIManager:show(
         InfoMessage:new{
             text =
-                table.concat(
-                    lines,
-                    "\n"
-                ),
+                table.concat(lines, "\n"),
         }
     )
 end
 
-
 function TBRRecommender:runMode(mode)
-
     local books =
         self:getBooks()
-
 
     if #books == 0 then
         UIManager:show(
@@ -190,59 +211,36 @@ function TBRRecommender:runMode(mode)
         return
     end
 
-
     if mode == "surprise" then
-
         self:showRecommendations(
             _("SURPRISE ME"),
-            Recommender:surpriseMe(
-                books,
-                3
-            )
+            Recommender:surpriseMe(books, 3)
         )
-
 
     elseif mode == "quick" then
-
         self:showRecommendations(
             _("QUICK READ"),
-            Recommender:quickRead(
-                books,
-                3
-            )
+            Recommender:quickRead(books, 3)
         )
-
 
     elseif mode == "series" then
-
         self:showRecommendations(
             _("CONTINUE A SERIES"),
-            Recommender:continueSeries(
-                books,
-                3
-            )
+            Recommender:continueSeries(books, 3)
         )
 
-
     elseif mode == "unopened" then
-
         self:showRecommendations(
             _("UNOPENED BOOKS"),
-            Recommender:unopened(
-                books,
-                3
-            )
+            Recommender:unopened(books, 3)
         )
     end
 end
 
-
 function TBRRecommender:addToMainMenu(
     menu_items
 )
-
     menu_items.tbr_recommender = {
-
         text =
             _("TBR Recommender"),
 
@@ -250,19 +248,15 @@ function TBRRecommender:addToMainMenu(
             "tools",
 
         sub_item_table = {
-
             {
                 text =
                     _("Surprise Me"),
 
                 callback =
                     function()
-                        self:runMode(
-                            "surprise"
-                        )
+                        self:runMode("surprise")
                     end,
             },
-
 
             {
                 text =
@@ -270,12 +264,9 @@ function TBRRecommender:addToMainMenu(
 
                 callback =
                     function()
-                        self:runMode(
-                            "quick"
-                        )
+                        self:runMode("quick")
                     end,
             },
-
 
             {
                 text =
@@ -283,12 +274,9 @@ function TBRRecommender:addToMainMenu(
 
                 callback =
                     function()
-                        self:runMode(
-                            "series"
-                        )
+                        self:runMode("series")
                     end,
             },
-
 
             {
                 text =
@@ -296,12 +284,41 @@ function TBRRecommender:addToMainMenu(
 
                 callback =
                     function()
-                        self:runMode(
-                            "unopened"
-                        )
+                        self:runMode("unopened")
                     end,
             },
 
+            {
+                text =
+                    _("Check for Updates"),
+
+                callback =
+                    function()
+                        local Updater =
+                            loadUpdater()
+
+                        if Updater then
+                            Updater:checkForUpdates(
+                                PLUGIN_VERSION
+                            )
+                        end
+                    end,
+            },
+
+            {
+                text =
+                    _("Restore Previous Version"),
+
+                callback =
+                    function()
+                        local Updater =
+                            loadUpdater()
+
+                        if Updater then
+                            Updater:confirmRestore()
+                        end
+                    end,
+            },
 
             {
                 text =
@@ -309,7 +326,6 @@ function TBRRecommender:addToMainMenu(
 
                 callback =
                     function()
-
                         UIManager:show(
                             InfoMessage:new{
                                 text =
@@ -326,6 +342,5 @@ function TBRRecommender:addToMainMenu(
         },
     }
 end
-
 
 return TBRRecommender

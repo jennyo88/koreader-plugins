@@ -10,7 +10,6 @@
         "updater.lua"
       ]
     },
-
     "tbrrecommender": {
       "name": "TBR Recommender",
       "version": "0.1.1",
