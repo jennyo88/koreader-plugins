@@ -19,6 +19,8 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
+local Dispatcher = require("dispatcher")
+
 local Screen = Device.screen
 
 
@@ -517,11 +519,17 @@ local ReadingDashboard =
 
 
 function ReadingDashboard:init()
+    self:onDispatcherRegisterActions()
+
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
     end
 end
 
+function ReadingDashboard:onOpenReadingDashboard()
+    self:showDashboard()
+    return true
+end
 
 function ReadingDashboard:getBookTitle()
 
@@ -766,7 +774,6 @@ function ReadingDashboard:showDashboard()
     UIManager:show(dialog)
 end
 
-
 function ReadingDashboard:addToMainMenu(
     menu_items
 )
@@ -783,6 +790,18 @@ function ReadingDashboard:addToMainMenu(
                 self:showDashboard()
             end,
     }
+end
+
+function ReadingDashboard:onDispatcherRegisterActions()
+    Dispatcher:registerAction(
+        "reading_dashboard_open",
+        {
+            category = "none",
+            event = "OpenReadingDashboard",
+            title = _("Open Reading Dashboard"),
+            general = true,
+        }
+    )
 end
 
 
