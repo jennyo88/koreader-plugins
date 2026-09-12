@@ -151,27 +151,33 @@ function ReadingDashboard:showDashboard()
     local lines = {
         book_title,
         "",
-        _("READING PROGRESS"),
+        _("PROGRESS"),
     }
 
-    if progress.percentage then
-        table.insert(
-            lines,
-            string.format("%d%%", progress.percentage)
-        )
-    else
-        table.insert(lines, _("Progress unavailable"))
-    end
+    if progress.percentage
+        and progress.current_page
+        and progress.page_count then
 
-    if progress.current_page and progress.page_count then
         table.insert(
             lines,
             string.format(
-                _("Page %d of %d"),
+                _("%d%%   •   Page %d of %d"),
+                progress.percentage,
                 progress.current_page,
                 progress.page_count
             )
         )
+
+    elseif progress.percentage then
+        table.insert(
+            lines,
+            string.format(
+                _("%d%%"),
+                progress.percentage
+            )
+        )
+    else
+        table.insert(lines, _("Progress unavailable"))
     end
 
     if progress.pages_remaining then
@@ -185,30 +191,26 @@ function ReadingDashboard:showDashboard()
     end
 
     table.insert(lines, "")
-    table.insert(lines, _("READING STATS"))
+    table.insert(lines, _("READING"))
 
     if stats.book_read_time then
         table.insert(
             lines,
             string.format(
-                _("Time read: %s"),
+                _("Time read        %s"),
                 formatTime(stats.book_read_time)
             )
         )
-    else
-        table.insert(lines, _("Time read: unavailable"))
     end
 
     if stats.avg_time then
         table.insert(
             lines,
             string.format(
-                _("Average: %s/page"),
+                _("Avg. per page    %s"),
                 formatTime(stats.avg_time)
             )
         )
-    else
-        table.insert(lines, _("Average: unavailable"))
     end
 
     if stats.avg_time and progress.pages_remaining then
@@ -218,12 +220,10 @@ function ReadingDashboard:showDashboard()
         table.insert(
             lines,
             string.format(
-                _("Estimated left: %s"),
+                _("Time remaining   %s"),
                 formatTime(estimated_remaining)
             )
         )
-    else
-        table.insert(lines, _("Estimated left: unavailable"))
     end
 
     UIManager:show(InfoMessage:new{
