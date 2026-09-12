@@ -7,8 +7,7 @@
       "files": [
         "_meta.lua",
         "main.lua",
-        "updater.lua",
-        "README.md"
+        "updater.lua"
       ]
     }
   }
