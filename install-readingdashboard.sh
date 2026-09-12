@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-REPO="${1:-YOUR_GITHUB_USERNAME/koreader-plugins}"
+REPO="${1:-jennyo88/koreader-plugins}"
 PLUGIN="readingdashboard"
 BRANCH="${BRANCH:-main}"
 
@@ -20,8 +20,15 @@ mkdir -p "$TMP"
 BASE="https://raw.githubusercontent.com/$REPO/$BRANCH/$PLUGIN.koplugin"
 
 echo "Downloading plugin files..."
-curl -fL "$BASE/_meta.lua" -o "$TMP/_meta.lua"
-curl -fL "$BASE/main.lua" -o "$TMP/main.lua"
+
+curl -fL "$BASE/_meta.lua" \
+  -o "$TMP/_meta.lua"
+
+curl -fL "$BASE/main.lua" \
+  -o "$TMP/main.lua"
+
+curl -fL "$BASE/updater.lua" \
+  -o "$TMP/updater.lua"
 
 if [ -d "$TARGET" ]; then
     echo "Updating existing installation..."
@@ -30,11 +37,22 @@ else
 fi
 
 mkdir -p "$TARGET"
-cp "$TMP/_meta.lua" "$TARGET/_meta.lua"
-cp "$TMP/main.lua" "$TARGET/main.lua"
+
+cp "$TMP/_meta.lua" \
+  "$TARGET/_meta.lua"
+
+cp "$TMP/main.lua" \
+  "$TARGET/main.lua"
+
+cp "$TMP/updater.lua" \
+  "$TARGET/updater.lua"
 
 rm -rf "$TMP"
 
 echo
-echo "Installed: $TARGET"
+echo "Installed:"
+echo "  $TARGET/_meta.lua"
+echo "  $TARGET/main.lua"
+echo "  $TARGET/updater.lua"
+echo
 echo "Restart KOReader to load Reading Dashboard."
