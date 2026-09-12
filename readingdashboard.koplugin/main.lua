@@ -31,16 +31,50 @@ local Screen = Device.screen
 
 local source = debug.getinfo(1, "S").source
 
-local plugin_dir =
-    source:match("^@(.+)/[^/]+$")
-    or "/mnt/us/koreader/plugins/readingdashboard.koplugin"
+if source:sub(1, 1) == "@" then
+    source = source:sub(2)
+end
+
+local plugin_dir = source:match("(.+)/[^/]+$")
+
+-- KOReader may report plugin paths relative to /mnt/us/koreader.
+if plugin_dir and plugin_dir:sub(1, 1) ~= "/" then
+    plugin_dir = "/mnt/us/koreader/" .. plugin_dir
+end
+
+-- Final fallback for Kindle.
+if not plugin_dir then
+    plugin_dir =
+        "/mnt/us/koreader/plugins/readingdashboard.koplugin"
+end
 
 
 local function loadUpdater()
+    local updater_path =
+        plugin_dir .. "/updater.lua"
+
+    local file = io.open(updater_path, "r")
+
+    if not file then
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Updater file was not found.\n\n"
+                    .. updater_path
+                    .. "\n\n"
+                    .. "Run the installer again to install updater.lua.",
+            }
+        )
+
+        return nil
+    end
+
+    file:close()
+
     local ok, updater_or_error =
         pcall(
             dofile,
-            plugin_dir .. "/updater.lua"
+            updater_path
         )
 
     if not ok then
