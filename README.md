@@ -36,35 +36,31 @@ Install/update:
 /mnt/us/install-tbrrecommender.sh YOUR_GITHUB_USERNAME/koreader-plugins
 ```
 
-# Reading Brain prototype
+### Reading Brain v0.2.0
 
-Upload the `readingbrain.koplugin` folder and `install-readingbrain.sh` to the root of your existing `koreader-plugins` repository.
+Upload these files to `readingbrain.koplugin/`:
 
-Install on Kindle:
+- `_meta.lua`
+- `main.lua`
+- `bookmory.lua`
+- `library.lua`
+- `stats.lua`
+- `brain.lua`
+- `updater.lua`
+- `README.md`
 
-```sh
-cd /mnt/us
-curl -fL \
-https://raw.githubusercontent.com/jennyo88/koreader-plugins/main/install-readingbrain.sh \
--o install-readingbrain.sh
+Upload `install-readingbrain.sh` to the repository root.
 
-chmod +x install-readingbrain.sh
-./install-readingbrain.sh
-```
+In the root `manifest.json`, update the existing `readingbrain` entry to the contents of `manifest-readingbrain-entry.json`.
 
-Then place a Bookmory backup in:
+Do not overwrite the other plugin entries.
 
-```text
-/mnt/us/readingbrain/
-```
-
-Restart KOReader and use:
+After these files are on GitHub, Reading Brain v0.1.1 can install v0.2.0 through:
 
 ```text
-Tools → Reading Brain → Analyze Bookmory Backup
+Tools → Reading Brain → Check for Updates
 ```
 
-This prototype is read-only.
 
 
 More plugins can be added alongside it as separate `.koplugin` directories.
