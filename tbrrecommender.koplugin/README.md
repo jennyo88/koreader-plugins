@@ -4,7 +4,7 @@ A personal KOReader plugin that recommends books already on your Kindle.
 
 ## Version
 
-`0.1.1`
+`0.1.2`
 
 ## Library location
 
@@ -48,3 +48,12 @@ Restart now
 - Finished books are excluded when KOReader marks them `complete`.
 - Unopened books may have less metadata until KOReader has cached information.
 - Recommendations are not yet tappable.
+
+
+## Tappable recommendations
+
+Recommendations are now shown as buttons.
+
+- Tap a book to open it directly in KOReader.
+- **Pick Again** generates another set of three using the same mode.
+- **Close** dismisses the recommendation window.

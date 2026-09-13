@@ -12,7 +12,7 @@
     },
     "tbrrecommender": {
       "name": "TBR Recommender",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Recommends unread books already on your Kindle.",
       "files": [
         "_meta.lua",
