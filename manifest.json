@@ -21,7 +21,7 @@
         "recommender.lua",
         "updater.lua"
       ]
-    }
+    },
     "readingbrain": {
       "name": "Reading Brain",
       "version": "0.1.1",
