@@ -39,6 +39,7 @@ local function newest_bookmory_in_dir(dir)
 
                 if a and a.mode == "file" then
                     local mtime = tonumber(a.modification) or 0
+
                     if mtime > best_mtime then
                         best_path = path
                         best_mtime = mtime
@@ -180,7 +181,8 @@ function Bookmory:summarize(books)
 
     for _, book in ipairs(books or {}) do
         local reads = book.reads or {}
-        local book_is_audio_only = false
+        local book_is_audio_only =
+            book.book_type == "audioBook"
 
         for _, read in ipairs(reads) do
             result.reads = result.reads + 1
@@ -193,6 +195,7 @@ function Bookmory:summarize(books)
 
             local is_audio =
                 read.book_type == "audioBook"
+                or book.book_type == "audioBook"
 
             if is_audio then
                 book_is_audio_only = true
@@ -201,25 +204,15 @@ function Bookmory:summarize(books)
             for _, timer in ipairs(read.read_timer_list or {}) do
                 result.sessions = result.sessions + 1
 
-                local elapsed =
-                    tonumber(timer.elapsed_sec)
-                    or 0
-
-                result.seconds =
-                    result.seconds
-                    + elapsed
+                local elapsed = tonumber(timer.elapsed_sec) or 0
+                result.seconds = result.seconds + elapsed
 
                 if is_audio then
                     result.audiobook_sessions =
-                        result.audiobook_sessions
-                        + 1
+                        result.audiobook_sessions + 1
                 else
-                    -- Bookmory sessions for text-capable books are kept
-                    -- deliberately neutral: they may represent audiobook
-                    -- listening, immersive reading, or another external mode.
                     result.external_sessions =
-                        result.external_sessions
-                        + 1
+                        result.external_sessions + 1
                 end
             end
         end
@@ -233,8 +226,7 @@ function Bookmory:summarize(books)
             if not audio_title_seen[key] then
                 audio_title_seen[key] = true
                 result.audiobook_titles =
-                    result.audiobook_titles
-                    + 1
+                    result.audiobook_titles + 1
             end
         end
     end
@@ -242,10 +234,48 @@ function Bookmory:summarize(books)
     return result
 end
 
-function Bookmory:cleanup(db_path)
-    if db_path
-        and db_path:match("^/tmp/") then
+function Bookmory:getSessions(book)
+    local sessions = {}
 
+    for _, read in ipairs(book.reads or {}) do
+        local is_audio =
+            read.book_type == "audioBook"
+            or book.book_type == "audioBook"
+
+        local medium =
+            is_audio
+            and "Audiobook"
+            or "External/Hybrid"
+
+        for _, timer in ipairs(read.read_timer_list or {}) do
+            local started_ms =
+                tonumber(timer.read_started_at)
+                or tonumber(timer.created_at)
+                or 0
+
+            local started_sec =
+                math.floor(started_ms / 1000)
+
+            local duration =
+                tonumber(timer.elapsed_sec)
+                or 0
+
+            if duration > 0 then
+                table.insert(sessions, {
+                    source = "Bookmory",
+                    medium = medium,
+                    start_time = started_sec,
+                    duration = duration,
+                })
+            end
+        end
+    end
+
+    return sessions
+end
+
+function Bookmory:cleanup(db_path)
+    if db_path and db_path:match("^/tmp/") then
         os.remove(db_path)
     end
 end

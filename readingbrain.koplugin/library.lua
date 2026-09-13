@@ -13,7 +13,7 @@ local function dirname(path)
     return path:match("^(.*)/[^/]+$")
 end
 
-local function normalize(value)
+function Library:normalize(value)
     if type(value) ~= "string" then
         return ""
     end
@@ -27,7 +27,7 @@ local function normalize(value)
     return value
 end
 
-local function author_string(value)
+function Library:authorString(value)
     if type(value) == "string" then
         return value
     elseif type(value) == "table" then
@@ -54,12 +54,10 @@ local function scan(path, results)
                 if a.mode == "directory" then
                     if name:sub(1, 1) ~= "."
                         and not name:match("%.sdr$") then
-
                         scan(full, results)
                     end
                 elseif a.mode == "file"
                     and name:lower():match("%.epub$") then
-
                     table.insert(results, full)
                 end
             end
@@ -84,61 +82,107 @@ function Library:getBooks()
         end)
 
         if ok and settings then
-            local props =
-                settings:readSetting("doc_props")
-                or {}
+            local props = settings:readSetting("doc_props") or {}
 
             item.title = props.title
             item.authors = props.authors
-            item.identifiers =
-                props.identifiers
+            item.identifiers = props.identifiers
+            item.series = props.series
+            item.series_index = props.series_index
+            item.percent_finished = settings:readSetting("percent_finished")
+            item.status = (settings:readSetting("summary") or {}).status
         end
 
         if not item.title or item.title == "" then
-            item.title =
-                item.filename:gsub(
-                    "%.[Ee][Pp][Uu][Bb]$",
-                    ""
-                )
+            item.title = item.filename:gsub("%.[Ee][Pp][Uu][Bb]$", "")
         end
 
-        item.normalized_title =
-            normalize(item.title)
+        item.normalized_title = self:normalize(item.title)
+        item.normalized_authors = self:normalize(self:authorString(item.authors))
 
-        item.normalized_authors =
-            normalize(
-                author_string(
-                    item.authors
-                )
-            )
-
-        table.insert(
-            books,
-            item
-        )
+        table.insert(books, item)
     end
 
     return books
 end
 
-function Library:matchBookmory(bookmory_books, kindle_books)
-    local title_index = {}
+function Library:canonicalKey(title, authors)
+    local t = self:normalize(title)
+    local a = self:normalize(self:authorString(authors))
+
+    if t == "" then
+        return nil
+    end
+
+    return t .. "\0" .. a
+end
+
+function Library:buildTitleIndex(kindle_books)
+    local index = {}
 
     for _, book in ipairs(kindle_books or {}) do
-        local key =
-            book.normalized_title
+        local key = book.normalized_title
 
         if key ~= "" then
-            title_index[key] =
-                title_index[key]
-                or {}
-
-            table.insert(
-                title_index[key],
-                book
-            )
+            index[key] = index[key] or {}
+            table.insert(index[key], book)
         end
     end
+
+    return index
+end
+
+function Library:matchOne(title, authors, kindle_books, title_index)
+    title_index = title_index or self:buildTitleIndex(kindle_books)
+
+    local nt = self:normalize(title)
+    local na = self:normalize(self:authorString(authors))
+    local candidates = title_index[nt] or {}
+
+    if #candidates == 0 then
+        return nil, "unmatched"
+    end
+
+    if #candidates == 1 then
+        local candidate = candidates[1]
+        local ca = candidate.normalized_authors or ""
+
+        if na == ""
+            or ca == ""
+            or na == ca
+            or ca:find(na, 1, true)
+            or na:find(ca, 1, true) then
+            return candidate, "matched"
+        end
+
+        return nil, "unmatched"
+    end
+
+    local matches = {}
+
+    for _, candidate in ipairs(candidates) do
+        local ca = candidate.normalized_authors or ""
+
+        if na ~= ""
+            and ca ~= ""
+            and (
+                na == ca
+                or ca:find(na, 1, true)
+                or na:find(ca, 1, true)
+            ) then
+            table.insert(matches, candidate)
+        end
+    end
+
+    if #matches == 1 then
+        return matches[1], "matched"
+    end
+
+    return nil, "ambiguous"
+end
+
+function Library:matchBookmory(bookmory_books, kindle_books)
+    local title_index = self:buildTitleIndex(kindle_books)
 
     local summary = {
         matched = 0,
@@ -153,112 +197,17 @@ function Library:matchBookmory(bookmory_books, kindle_books)
     }
 
     for _, b in ipairs(bookmory_books or {}) do
-        local title =
-            normalize(
-                b.title
-            )
+        local _, status = self:matchOne(
+            b.title,
+            b.authors,
+            kindle_books,
+            title_index
+        )
 
-        local authors =
-            normalize(
-                author_string(
-                    b.authors
-                )
-            )
+        summary[status] = summary[status] + 1
 
-        local candidates =
-            title_index[title]
-            or {}
-
-        local matches = {}
-
-        if #candidates == 1 then
-            local candidate =
-                candidates[1]
-
-            -- Exact title is enough when one side lacks usable author
-            -- metadata. When both sides have authors, require overlap.
-            if authors == ""
-                or candidate.normalized_authors == ""
-                or authors == candidate.normalized_authors
-                or candidate.normalized_authors:find(
-                    authors,
-                    1,
-                    true
-                )
-                or authors:find(
-                    candidate.normalized_authors,
-                    1,
-                    true
-                ) then
-
-                table.insert(
-                    matches,
-                    candidate
-                )
-            end
-        elseif #candidates > 1 then
-            for _, candidate in ipairs(candidates) do
-                if authors ~= ""
-                    and candidate.normalized_authors ~= ""
-                    and (
-                        authors == candidate.normalized_authors
-                        or candidate.normalized_authors:find(
-                            authors,
-                            1,
-                            true
-                        )
-                        or authors:find(
-                            candidate.normalized_authors,
-                            1,
-                            true
-                        )
-                    ) then
-
-                    table.insert(
-                        matches,
-                        candidate
-                    )
-                end
-            end
-        end
-
-        if #matches == 1 then
-            summary.matched =
-                summary.matched
-                + 1
-
-            if #examples.matched < 5 then
-                table.insert(
-                    examples.matched,
-                    b.title or "Untitled"
-                )
-            end
-
-        elseif #matches > 1
-            or #candidates > 1 then
-
-            summary.ambiguous =
-                summary.ambiguous
-                + 1
-
-            if #examples.ambiguous < 5 then
-                table.insert(
-                    examples.ambiguous,
-                    b.title or "Untitled"
-                )
-            end
-
-        else
-            summary.unmatched =
-                summary.unmatched
-                + 1
-
-            if #examples.unmatched < 5 then
-                table.insert(
-                    examples.unmatched,
-                    b.title or "Untitled"
-                )
-            end
+        if #examples[status] < 5 then
+            table.insert(examples[status], b.title or "Untitled")
         end
     end
 

@@ -1,72 +1,71 @@
-# Reading Brain v0.1.1
+# Reading Brain v0.2.0
 
-Experimental, read-only KOReader plugin for combining Bookmory and Kindle/KOReader reading data.
+Reading Brain creates a separate unified reading history from:
 
-## What v0.1.0 does
+- KOReader reading statistics
+- Bookmory timed reading sessions
 
-- Finds the newest `.bookmory` backup.
-- Extracts `new_bookmory.db` with KOReader's archive reader.
-- Reads the Bookmory SQLite database with KOReader's bundled SQLite library.
-- Counts Bookmory books, reads, timed sessions, and total logged time.
-- Separates explicit `audioBook` sessions from neutral external/hybrid sessions.
-- Scans EPUBs in `/mnt/us/koreader/books`.
-- Performs conservative title/author matching.
-- Shows a summary.
+It never writes to KOReader's own statistics database.
 
-## What it does NOT do
+## Data model
 
-It does not import, merge, overwrite, or modify KOReader reading statistics.
+Reading Brain distinguishes **source** from **medium**.
 
-This version is intentionally read-only.
+Sources:
 
-## Backup location
+- KOReader
+- Bookmory
 
-Create:
+Media:
+
+- Kindle
+- Audiobook
+- External/Hybrid
+
+Bookmory records explicitly marked `audioBook` are imported as **Audiobook**.
+
+Bookmory sessions for text-capable books are deliberately imported as **External/Hybrid**, because those sessions may represent audiobook listening, immersive reading, or another external reading mode.
+
+KOReader sessions are imported as **Kindle**.
+
+## Reading Brain database
+
+Reading Brain writes only to:
 
 ```text
-/mnt/us/readingbrain/
+/mnt/us/readingbrain/readingbrain.sqlite3
 ```
 
-and copy your latest `.bookmory` backup there.
+Re-syncing rebuilds this cache from the source data.
 
-The plugin also checks a few common top-level Kindle folders.
+## KOReader sessions
+
+KOReader's statistics plugin stores page-level timing rows rather than explicit session objects.
+
+Reading Brain groups those rows into sessions. A gap of more than **10 minutes** starts a new session.
+
+This does not alter the source database.
 
 ## Menu
 
 ```text
 Tools
 └── Reading Brain
-    ├── Analyze Bookmory Backup
-    └── About
-```
-
-## Matching
-
-v0.1.0 only performs conservative exact normalized title matching with author verification where metadata is available.
-
-Ambiguous matches are counted as **Needs review** rather than guessed.
-
-
-## Built-in updater
-
-Reading Brain now uses the same updater pattern as the other personal KOReader plugins.
-
-Menu:
-
-```text
-Tools
-└── Reading Brain
+    ├── Sync Unified History
+    ├── Unified Summary
+    ├── Recent Sessions
     ├── Analyze Bookmory Backup
     ├── Check for Updates
     ├── Restore Previous Version
     └── About
 ```
 
-The updater:
+## Safety
 
-- checks the root `manifest.json` in `jennyo88/koreader-plugins`
-- downloads updates from `readingbrain.koplugin/`
-- stages files in `/tmp`
-- backs up the previous plugin version
-- offers **Restart now / Restart later**
-- can restore the previous version
+Reading Brain does **not** modify:
+
+- KOReader `statistics.sqlite3`
+- Bookmory backups
+- EPUB files
+
+The only generated database is Reading Brain's own cache.

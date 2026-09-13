@@ -4,5 +4,5 @@ return {
     name = "readingbrain",
     fullname = _("Reading Brain"),
     description = _("Read-only Bookmory + KOReader library analyzer."),
-    version = "0.1.1",
+    version = "0.2.0",
 }
