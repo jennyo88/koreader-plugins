@@ -17,7 +17,7 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local filemanagerutil = require("apps/filemanager/filemanagerutil")
 local _ = require("gettext")
 
-local PLUGIN_VERSION = "0.2.0"
+local PLUGIN_VERSION = "0.2.1"
 local Screen = Device.screen
 
 local source = debug.getinfo(1, "S").source
