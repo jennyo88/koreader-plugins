@@ -31,7 +31,7 @@
         "main.lua",
         "bookmory.lua",
         "library.lua",
-        "stats",
+        "stats.lua",
         "brain.lua",
         "updater.lua"
       ]
