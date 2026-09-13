@@ -18,14 +18,14 @@ rm -rf "$TMP"
 mkdir -p "$TMP"
 mkdir -p "$DATA_DIR"
 
-for FILE in _meta.lua main.lua bookmory.lua library.lua updater.lua README.md; do
+for FILE in _meta.lua main.lua bookmory.lua library.lua stats.lua brain.lua updater.lua README.md; do
     echo "Downloading $FILE..."
     curl -fL "$BASE/$FILE" -o "$TMP/$FILE"
 done
 
 mkdir -p "$TARGET"
 
-for FILE in _meta.lua main.lua bookmory.lua library.lua updater.lua README.md; do
+for FILE in _meta.lua main.lua bookmory.lua library.lua stats.lua brain.lua updater.lua README.md; do
     cp "$TMP/$FILE" "$TARGET/$FILE"
 done
 
@@ -33,5 +33,5 @@ rm -rf "$TMP"
 
 echo
 echo "Installed Reading Brain."
-echo "Bookmory backup folder: $DATA_DIR"
+echo "Bookmory backup/data folder: $DATA_DIR"
 echo "Restart KOReader to load it."
