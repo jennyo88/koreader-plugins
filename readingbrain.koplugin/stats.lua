@@ -32,6 +32,7 @@ function Stats:read()
 
     local ok, err = pcall(function()
         local db = SQ3.open(self.db_path)
+        db:exec("PRAGMA query_only = ON;")
 
         local stmt = db:prepare([[
             SELECT

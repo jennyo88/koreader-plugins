@@ -114,7 +114,7 @@ function Library:canonicalKey(title, authors)
         return nil
     end
 
-    return t .. "\0" .. a
+    return t .. " :: " .. a
 end
 
 function Library:buildTitleIndex(kindle_books)

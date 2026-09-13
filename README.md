@@ -36,7 +36,7 @@ Install/update:
 /mnt/us/install-tbrrecommender.sh YOUR_GITHUB_USERNAME/koreader-plugins
 ```
 
-### Reading Brain v0.2.0
+### Reading Brain v0.2.1
 
 Upload these files to `readingbrain.koplugin/`:
 

@@ -14,22 +14,15 @@ local function ensure_dir()
     end
 end
 
-local function sqlquote(value)
-    if value == nil then
-        return "NULL"
-    end
-
-    value = tostring(value):gsub("'", "''")
-    return "'" .. value .. "'"
-end
-
 local function session_id(source, book_key, start_time, duration)
+    -- Printable separator only. Avoid NUL bytes in identifiers because
+    -- SQLite/Lua bindings may treat those as string terminators.
     return table.concat({
         tostring(source or ""),
         tostring(book_key or ""),
         tostring(start_time or 0),
         tostring(duration or 0),
-    }, "|")
+    }, " :: ")
 end
 
 function Brain:open()
@@ -79,22 +72,23 @@ function Brain:clearImportedData(db)
 end
 
 function Brain:upsertBook(db, book)
-    local sql = string.format([[
+    local stmt = db:prepare([[
         INSERT OR REPLACE INTO books
             (book_key, title, authors, kindle_file, bookmory_format, matched, updated_at)
-        VALUES
-            (%s, %s, %s, %s, %s, %d, %d);
-    ]],
-        sqlquote(book.book_key),
-        sqlquote(book.title),
-        sqlquote(book.authors),
-        sqlquote(book.kindle_file),
-        sqlquote(book.bookmory_format),
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+    ]])
+
+    stmt:reset():bind(
+        book.book_key,
+        book.title,
+        book.authors,
+        book.kindle_file,
+        book.bookmory_format,
         book.matched and 1 or 0,
         os.time()
-    )
+    ):step()
 
-    db:exec(sql)
+    stmt:close()
 end
 
 function Brain:insertSession(db, session)
@@ -105,34 +99,50 @@ function Brain:insertSession(db, session)
         session.duration
     )
 
-    local sql = string.format([[
+    local stmt = db:prepare([[
         INSERT OR IGNORE INTO sessions
             (session_id, book_key, source, medium, start_time, duration, imported_at)
-        VALUES
-            (%s, %s, %s, %s, %d, %d, %d);
-    ]],
-        sqlquote(sid),
-        sqlquote(session.book_key),
-        sqlquote(session.source),
-        sqlquote(session.medium),
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+    ]])
+
+    stmt:reset():bind(
+        sid,
+        session.book_key,
+        session.source,
+        session.medium,
         tonumber(session.start_time) or 0,
         tonumber(session.duration) or 0,
         os.time()
-    )
+    ):step()
 
-    db:exec(sql)
+    stmt:close()
 end
 
 function Brain:setMeta(db, key, value)
-    local sql = string.format([[
+    local stmt = db:prepare([[
         INSERT OR REPLACE INTO meta(key, value)
-        VALUES(%s, %s);
-    ]],
-        sqlquote(key),
-        sqlquote(value)
-    )
+        VALUES(?, ?);
+    ]])
 
-    db:exec(sql)
+    stmt:reset():bind(
+        tostring(key),
+        tostring(value)
+    ):step()
+
+    stmt:close()
+end
+
+local function scalar(db, sql)
+    local stmt = db:prepare(sql)
+    local rows, nrows = stmt:reset():resultset("i")
+    local value = 0
+
+    if rows and nrows and nrows > 0 then
+        value = tonumber(rows[1][1]) or 0
+    end
+
+    stmt:close()
+    return value
 end
 
 function Brain:getSummary()
@@ -144,31 +154,18 @@ function Brain:getSummary()
 
     local db = SQ3.open(self.db_path)
 
-    local books = tonumber(db:rowexec("SELECT count(*) FROM books;")) or 0
-    local matched = tonumber(db:rowexec("SELECT count(*) FROM books WHERE matched = 1;")) or 0
-    local sessions = tonumber(db:rowexec("SELECT count(*) FROM sessions;")) or 0
-    local seconds = tonumber(db:rowexec("SELECT coalesce(sum(duration), 0) FROM sessions;")) or 0
-    local kindle_seconds = tonumber(db:rowexec(
-        "SELECT coalesce(sum(duration), 0) FROM sessions WHERE medium = 'Kindle';"
-    )) or 0
-    local audio_seconds = tonumber(db:rowexec(
-        "SELECT coalesce(sum(duration), 0) FROM sessions WHERE medium = 'Audiobook';"
-    )) or 0
-    local hybrid_seconds = tonumber(db:rowexec(
-        "SELECT coalesce(sum(duration), 0) FROM sessions WHERE medium = 'External/Hybrid';"
-    )) or 0
+    local result = {
+        books = scalar(db, "SELECT count(*) FROM books;"),
+        matched = scalar(db, "SELECT count(*) FROM books WHERE matched = 1;"),
+        sessions = scalar(db, "SELECT count(*) FROM sessions;"),
+        seconds = scalar(db, "SELECT coalesce(sum(duration), 0) FROM sessions;"),
+        kindle_seconds = scalar(db, "SELECT coalesce(sum(duration), 0) FROM sessions WHERE medium = 'Kindle';"),
+        audio_seconds = scalar(db, "SELECT coalesce(sum(duration), 0) FROM sessions WHERE medium = 'Audiobook';"),
+        hybrid_seconds = scalar(db, "SELECT coalesce(sum(duration), 0) FROM sessions WHERE medium = 'External/Hybrid';"),
+    }
 
     db:close()
-
-    return {
-        books = books,
-        matched = matched,
-        sessions = sessions,
-        seconds = seconds,
-        kindle_seconds = kindle_seconds,
-        audio_seconds = audio_seconds,
-        hybrid_seconds = hybrid_seconds,
-    }
+    return result
 end
 
 function Brain:getRecentSessions(limit)

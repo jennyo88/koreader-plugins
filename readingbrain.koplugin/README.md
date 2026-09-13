@@ -1,4 +1,4 @@
-# Reading Brain v0.2.0
+# Reading Brain v0.2.1
 
 Reading Brain creates a separate unified reading history from:
 
@@ -69,3 +69,17 @@ Reading Brain does **not** modify:
 - EPUB files
 
 The only generated database is Reading Brain's own cache.
+
+
+## v0.2.1 sync fix
+
+This release fixes a crash during **Sync Unified History**.
+
+Changes:
+
+- removes embedded NUL bytes from Reading Brain book/session identifiers
+- switches Reading Brain database writes to prepared SQLite statements
+- reads KOReader statistics with `PRAGMA query_only = ON`
+- hardens summary queries
+
+If v0.2.0 created a partial `readingbrain.sqlite3`, v0.2.1 can safely rebuild it during the next sync.
