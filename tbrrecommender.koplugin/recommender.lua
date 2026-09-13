@@ -409,6 +409,17 @@ function Recommender:shortAndEasy(books, count)
         end
     end
 
+    -- If KOReader does not know the page counts
+    -- for any unopened books, fall back safely
+    -- to Quick Read.
+    if #candidates == 0 then
+
+        return self:quickRead(
+            books,
+            count
+        )
+    end
+
     table.sort(
         candidates,
         function(a, b)
@@ -425,23 +436,20 @@ function Recommender:shortAndEasy(books, count)
     local shorter = {}
 
     for i = 1, half do
+
         local book =
             candidates[i]
 
-        book.recommendation_note =
-            "Short & easy pick"
+        if book then
 
-        table.insert(
-            shorter,
-            book
-        )
-    end
+            book.recommendation_note =
+                "Short & easy pick"
 
-    if #shorter == 0 then
-        return self:quickRead(
-            books,
-            count
-        )
+            table.insert(
+                shorter,
+                book
+            )
+        end
     end
 
     return first_n(
