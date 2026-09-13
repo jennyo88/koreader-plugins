@@ -1,0 +1,14 @@
+{
+  "readingbrain": {
+    "name": "Reading Brain",
+    "version": "0.1.1",
+    "description": "Read-only Bookmory and KOReader library analyzer.",
+    "files": [
+      "_meta.lua",
+      "main.lua",
+      "bookmory.lua",
+      "library.lua",
+      "updater.lua"
+    ]
+  }
+}

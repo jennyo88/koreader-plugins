@@ -1,4 +1,4 @@
-# Reading Brain v0.1.0
+# Reading Brain v0.1.1
 
 Experimental, read-only KOReader plugin for combining Bookmory and Kindle/KOReader reading data.
 
@@ -45,3 +45,28 @@ Tools
 v0.1.0 only performs conservative exact normalized title matching with author verification where metadata is available.
 
 Ambiguous matches are counted as **Needs review** rather than guessed.
+
+
+## Built-in updater
+
+Reading Brain now uses the same updater pattern as the other personal KOReader plugins.
+
+Menu:
+
+```text
+Tools
+└── Reading Brain
+    ├── Analyze Bookmory Backup
+    ├── Check for Updates
+    ├── Restore Previous Version
+    └── About
+```
+
+The updater:
+
+- checks the root `manifest.json` in `jennyo88/koreader-plugins`
+- downloads updates from `readingbrain.koplugin/`
+- stages files in `/tmp`
+- backs up the previous plugin version
+- offers **Restart now / Restart later**
+- can restore the previous version

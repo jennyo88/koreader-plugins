@@ -1,25 +1,37 @@
 #!/bin/sh
-
-set -e
+set -eu
 
 REPO="${1:-jennyo88/koreader-plugins}"
-BRANCH="${2:-main}"
+PLUGIN="readingbrain"
+BRANCH="${BRANCH:-main}"
 
-PLUGIN_DIR="/mnt/us/koreader/plugins/readingbrain.koplugin"
+TARGET="/mnt/us/koreader/plugins/$PLUGIN.koplugin"
 DATA_DIR="/mnt/us/readingbrain"
-BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}/readingbrain.koplugin"
+TMP="/tmp/$PLUGIN-install"
+BASE="https://raw.githubusercontent.com/$REPO/$BRANCH/$PLUGIN.koplugin"
 
-mkdir -p "$PLUGIN_DIR"
+echo "Reading Brain installer"
+echo "Repository: $REPO"
+echo
+
+rm -rf "$TMP"
+mkdir -p "$TMP"
 mkdir -p "$DATA_DIR"
 
-for file in _meta.lua main.lua bookmory.lua library.lua README.md; do
-    echo "Downloading $file..."
-    curl -fL "$BASE/$file" -o "$PLUGIN_DIR/$file"
+for FILE in _meta.lua main.lua bookmory.lua library.lua updater.lua README.md; do
+    echo "Downloading $FILE..."
+    curl -fL "$BASE/$FILE" -o "$TMP/$FILE"
 done
 
+mkdir -p "$TARGET"
+
+for FILE in _meta.lua main.lua bookmory.lua library.lua updater.lua README.md; do
+    cp "$TMP/$FILE" "$TARGET/$FILE"
+done
+
+rm -rf "$TMP"
+
 echo
-echo "Reading Brain installed."
-echo "Copy a .bookmory backup into:"
-echo "$DATA_DIR"
-echo
-echo "Restart KOReader."
+echo "Installed Reading Brain."
+echo "Bookmory backup folder: $DATA_DIR"
+echo "Restart KOReader to load it."
