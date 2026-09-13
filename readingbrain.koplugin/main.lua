@@ -1,10 +1,11 @@
+local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
-local PLUGIN_VERSION = "0.2.1"
+local PLUGIN_VERSION = "0.4.0"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -21,6 +22,8 @@ local Bookmory = dofile(plugin_dir .. "/bookmory.lua")
 local Library = dofile(plugin_dir .. "/library.lua")
 local Stats = dofile(plugin_dir .. "/stats.lua")
 local Brain = dofile(plugin_dir .. "/brain.lua")
+local Discovery = dofile(plugin_dir .. "/discovery.lua")
+local UpdateNotifier = dofile(plugin_dir .. "/update_notifier.lua")
 
 local function loadUpdater()
     local updater_path = plugin_dir .. "/updater.lua"
@@ -82,8 +85,30 @@ local function book_key(title, authors)
 end
 
 function ReadingBrain:init()
+    self.discovery_dialog = nil
+
+    self.update_notifier =
+        UpdateNotifier:new{
+            plugin_id = "readingbrain",
+            plugin_name = "Reading Brain",
+            current_version = PLUGIN_VERSION,
+        }
+
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
+    end
+
+    self.update_notifier:scheduleStartupCheck()
+end
+
+function ReadingBrain:onResume()
+    if self.update_notifier then
+        UIManager:scheduleIn(
+            6,
+            function()
+                self.update_notifier:checkIfDue()
+            end
+        )
     end
 end
 
@@ -423,12 +448,306 @@ function ReadingBrain:confirmRebuild()
     })
 end
 
+
+function ReadingBrain:closeDiscoveryDialog()
+    if self.discovery_dialog then
+        UIManager:close(
+            self.discovery_dialog
+        )
+
+        self.discovery_dialog = nil
+    end
+end
+
+function ReadingBrain:loadBookmoryBooks()
+    local backup =
+        Bookmory:findLatestBackup()
+
+    if not backup then
+        return nil,
+            "No .bookmory backup was found in /mnt/us/readingbrain/."
+    end
+
+    local db_path, err =
+        Bookmory:extractDatabase(
+            backup
+        )
+
+    if not db_path then
+        return nil, err
+    end
+
+    local books, read_err =
+        Bookmory:readBooks(
+            db_path
+        )
+
+    Bookmory:cleanup(
+        db_path
+    )
+
+    if not books then
+        return nil, read_err
+    end
+
+    return books
+end
+
+function ReadingBrain:showTasteProfile()
+    local books, err =
+        self:loadBookmoryBooks()
+
+    if not books then
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Could not build taste profile.\n\n"
+                    .. tostring(err),
+            }
+        )
+
+        return
+    end
+
+    local profile =
+        Discovery:buildProfile(
+            books
+        )
+
+    UIManager:show(
+        InfoMessage:new{
+            text =
+                Discovery:profileText(
+                    profile
+                ),
+        }
+    )
+end
+
+function ReadingBrain:discoverBooks()
+    local status =
+        InfoMessage:new{
+            text =
+                _("Finding books you may like…"),
+        }
+
+    UIManager:show(status)
+    UIManager:forceRePaint()
+
+    local books, err =
+        self:loadBookmoryBooks()
+
+    if not books then
+        UIManager:close(status)
+
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Could not read Bookmory.\n\n"
+                    .. tostring(err),
+            }
+        )
+
+        return
+    end
+
+    local kindle_books =
+        Library:getBooks()
+
+    local recommendations, discover_err =
+        Discovery:recommend(
+            books,
+            kindle_books,
+            5
+        )
+
+    UIManager:close(status)
+
+    if not recommendations then
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Book discovery failed.\n\n"
+                    .. tostring(
+                        discover_err
+                    ),
+            }
+        )
+
+        return
+    end
+
+    if #recommendations == 0 then
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "No new recommendations were found this time.",
+            }
+        )
+
+        return
+    end
+
+    local buttons = {}
+
+    for i, book in ipairs(
+        recommendations
+    ) do
+        local selected =
+            book
+
+        local author =
+            table.concat(
+                selected.authors or {},
+                ", "
+            )
+
+        local label =
+            tostring(i)
+            .. ". "
+            .. tostring(
+                selected.title
+                or "Unknown title"
+            )
+
+        if author ~= "" then
+            label =
+                label
+                .. "\n"
+                .. author
+        end
+
+        label =
+            label
+            .. "\nMatch score: "
+            .. string.format(
+                "%.1f",
+                selected.score
+                or 0
+            )
+
+        table.insert(
+            buttons,
+            {
+                {
+                    text = label,
+
+                    callback =
+                        function()
+                            local reason =
+                                #(
+                                    selected.reasons
+                                    or {}
+                                ) > 0
+                                and table.concat(
+                                    selected.reasons,
+                                    "\n"
+                                )
+                                or "Strong overall taste match"
+
+                            UIManager:show(
+                                InfoMessage:new{
+                                    text =
+                                        tostring(
+                                            selected.title
+                                            or "Unknown title"
+                                        )
+                                        .. "\n\n"
+                                        .. (
+                                            author ~= ""
+                                            and author
+                                            or "Unknown author"
+                                        )
+                                        .. (
+                                            selected.year
+                                            and (
+                                                "\nFirst published: "
+                                                .. tostring(
+                                                    selected.year
+                                                )
+                                            )
+                                            or ""
+                                        )
+                                        .. "\n\nWHY READING BRAIN PICKED IT\n"
+                                        .. reason
+                                        .. "\n\nOpen Library work:\n"
+                                        .. tostring(
+                                            selected.key
+                                            or "Unknown"
+                                        ),
+                                }
+                            )
+                        end,
+                },
+            }
+        )
+    end
+
+    table.insert(
+        buttons,
+        {
+            {
+                text =
+                    _("Refresh"),
+
+                callback =
+                    function()
+                        self:closeDiscoveryDialog()
+                        self:discoverBooks()
+                    end,
+            },
+
+            {
+                text =
+                    _("Close"),
+
+                callback =
+                    function()
+                        self:closeDiscoveryDialog()
+                    end,
+            },
+        }
+    )
+
+    self.discovery_dialog =
+        ButtonDialog:new{
+            title =
+                _("DISCOVER BOOKS")
+                .. "\n"
+                .. _("Based on your Bookmory ratings"),
+
+            title_align =
+                "center",
+
+            buttons =
+                buttons,
+        }
+
+    UIManager:show(
+        self.discovery_dialog
+    )
+end
+
 function ReadingBrain:addToMainMenu(menu_items)
     menu_items.reading_brain = {
         text = _("Reading Brain"),
         sorting_hint = "tools",
 
         sub_item_table = {
+            {
+                text = _("Discover Books"),
+                callback = function()
+                    self:discoverBooks()
+                end,
+            },
+
+            {
+                text = _("Taste Profile"),
+                callback = function()
+                    self:showTasteProfile()
+                end,
+            },
+
             {
                 text = _("Sync Unified History"),
                 callback = function()
@@ -509,6 +828,22 @@ function ReadingBrain:addToMainMenu(menu_items)
             },
 
             {
+                text = _("Notify when an update is available"),
+                checked_func = function()
+                    return
+                        self.update_notifier
+                        and self.update_notifier:isEnabled()
+                end,
+                callback = function()
+                    if self.update_notifier then
+                        self.update_notifier:setEnabled(
+                            not self.update_notifier:isEnabled()
+                        )
+                    end
+                end,
+            },
+
+            {
                 text = _("Check for Updates"),
                 callback = function()
                     local Updater = loadUpdater()
@@ -540,7 +875,7 @@ function ReadingBrain:addToMainMenu(menu_items)
                             "Reading Brain v"
                             .. PLUGIN_VERSION
                             .. "\n\n"
-                            .. "Unified reading history for KOReader + Bookmory.\n\n"
+                            .. "Unified reading history + book discovery from your Bookmory ratings.\n\n"
                             .. "Reading Brain writes only to:\n"
                             .. "/mnt/us/readingbrain/readingbrain.sqlite3\n\n"
                             .. "It never writes to KOReader's statistics.sqlite3 or your Bookmory backup.\n\n"

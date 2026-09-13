@@ -1,85 +1,68 @@
-# Reading Brain v0.2.1
+# Reading Brain v0.4.0
 
-Reading Brain creates a separate unified reading history from:
+Reading Brain combines your Bookmory history and KOReader statistics, and can now use your ratings to discover books you do not already own.
 
-- KOReader reading statistics
-- Bookmory timed reading sessions
+## Discovery Engine
 
-It never writes to KOReader's own statistics database.
+`Discover Books`:
 
-## Data model
+1. Reads your Bookmory ratings.
+2. Builds positive and negative weights from Bookmory tags.
+3. Uses the strongest positive traits to fetch English-language candidates from Open Library.
+4. Excludes titles already present in Bookmory.
+5. Excludes titles already in `/mnt/us/koreader/books`.
+6. Scores the remaining candidates using your actual rating-derived taste profile.
+7. Shows the top five recommendations with an explanation.
 
-Reading Brain distinguishes **source** from **medium**.
+No Open Library account or API key is required.
 
-Sources:
+### Taste Profile
 
-- KOReader
-- Bookmory
+`Taste Profile` shows the strongest positive and negative tag tendencies Reading Brain currently sees in the Bookmory backup.
 
-Media:
+A 3-star rating is treated as neutral. Ratings above 3 add weight; ratings below 3 subtract weight.
 
-- Kindle
-- Audiobook
-- External/Hybrid
+## Built-in update notification
 
-Bookmory records explicitly marked `audioBook` are imported as **Audiobook**.
+Reading Brain now checks its own entry in your GitHub `manifest.json` quietly on startup/wake.
 
-Bookmory sessions for text-capable books are deliberately imported as **External/Hybrid**, because those sessions may represent audiobook listening, immersive reading, or another external reading mode.
+- checks at most once every 12 hours
+- only checks while Wi-Fi is already connected
+- does not turn Wi-Fi on
+- shows KOReader's small native top-edge notification when a newer Reading Brain version exists
+- never installs automatically
 
-KOReader sessions are imported as **Kindle**.
+You can toggle it in:
 
-## Reading Brain database
+```text
+Tools → Reading Brain → Notify when an update is available
+```
 
-Reading Brain writes only to:
+The normal **Check for Updates** command still performs the actual installation.
+
+## Unified reading history
+
+Reading Brain still keeps its separate cache at:
 
 ```text
 /mnt/us/readingbrain/readingbrain.sqlite3
 ```
 
-Re-syncing rebuilds this cache from the source data.
-
-## KOReader sessions
-
-KOReader's statistics plugin stores page-level timing rows rather than explicit session objects.
-
-Reading Brain groups those rows into sessions. A gap of more than **10 minutes** starts a new session.
-
-This does not alter the source database.
+It does not modify KOReader's statistics database or the Bookmory backup.
 
 ## Menu
 
 ```text
 Tools
 └── Reading Brain
+    ├── Discover Books
+    ├── Taste Profile
     ├── Sync Unified History
     ├── Unified Summary
     ├── Recent Sessions
     ├── Analyze Bookmory Backup
+    ├── Notify when an update is available
     ├── Check for Updates
     ├── Restore Previous Version
     └── About
 ```
-
-## Safety
-
-Reading Brain does **not** modify:
-
-- KOReader `statistics.sqlite3`
-- Bookmory backups
-- EPUB files
-
-The only generated database is Reading Brain's own cache.
-
-
-## v0.2.1 sync fix
-
-This release fixes a crash during **Sync Unified History**.
-
-Changes:
-
-- removes embedded NUL bytes from Reading Brain book/session identifiers
-- switches Reading Brain database writes to prepared SQLite statements
-- reads KOReader statistics with `PRAGMA query_only = ON`
-- hardens summary queries
-
-If v0.2.0 created a partial `readingbrain.sqlite3`, v0.2.1 can safely rebuild it during the next sync.
