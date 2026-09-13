@@ -58,6 +58,16 @@ local function supported(path)
     return ext and Library.extensions[ext] == true
 end
 
+local function sort_books(books)
+    table.sort(books, function(a, b)
+        local at = (a.title or a.filename or ""):lower()
+        local bt = (b.title or b.filename or ""):lower()
+        return at < bt
+    end)
+
+    return books
+end
+
 function Library:getDefaultRoot()
     if is_dir("/mnt/us/koreader/books") then
         return "/mnt/us/koreader/books"
@@ -182,24 +192,32 @@ function Library:scanDirectory(path, results)
     return results
 end
 
-function Library:getCandidates(root)
+-- Returns every supported book, including completed books.
+-- Continue a Series needs this so it can understand which earlier
+-- volumes have already been finished.
+function Library:getAllBooks(root)
     root = root or self:getDefaultRoot()
 
     local books = {}
 
     for _, file in ipairs(self:scanDirectory(root)) do
-        if not self:isFinished(file) then
-            table.insert(books, self:getMetadata(file))
+        table.insert(books, self:getMetadata(file))
+    end
+
+    return sort_books(books)
+end
+
+-- Normal TBR candidates exclude completed books.
+function Library:getCandidates(root)
+    local books = {}
+
+    for _, book in ipairs(self:getAllBooks(root)) do
+        if book.status ~= "complete" then
+            table.insert(books, book)
         end
     end
 
-    table.sort(books, function(a, b)
-        local at = (a.title or a.filename or ""):lower()
-        local bt = (b.title or b.filename or ""):lower()
-        return at < bt
-    end)
-
-    return books
+    return sort_books(books)
 end
 
 return Library

@@ -5,7 +5,7 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local filemanagerutil = require("apps/filemanager/filemanagerutil")
 local _ = require("gettext")
 
-local PLUGIN_VERSION = "0.1.2"
+local PLUGIN_VERSION = "0.1.3"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -87,6 +87,15 @@ local function details_for(book)
             series = series .. " #" .. tostring(book.series_index)
         end
         table.insert(bits, series)
+    end
+
+    if book.recommendation_note
+        and book.recommendation_note ~= "" then
+
+        table.insert(
+            bits,
+            book.recommendation_note
+        )
     end
 
     if not book.been_opened then
@@ -215,7 +224,7 @@ function TBRRecommender:runMode(mode)
 
     local books = self:getBooks()
 
-    if #books == 0 then
+    if #books == 0 and mode ~= "series" then
         UIManager:show(InfoMessage:new{
             text = _("No unread EPUBs were found in /mnt/us/koreader/books."),
         })
@@ -233,9 +242,17 @@ function TBRRecommender:runMode(mode)
             Recommender:quickRead(books, 3)
         )
     elseif mode == "series" then
+        local all_books =
+            Library:getAllBooks(
+                "/mnt/us/koreader/books"
+            )
+
         self:showRecommendations(
             _("CONTINUE A SERIES"),
-            Recommender:continueSeries(books, 3)
+            Recommender:continueSeries(
+                all_books,
+                3
+            )
         )
     elseif mode == "unopened" then
         self:showRecommendations(
