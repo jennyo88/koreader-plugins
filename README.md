@@ -6,7 +6,7 @@ Personal KOReader plugins designed for my Kindle.
 
 ### Reading Dashboard
 
-Current version: `0.5.1`
+Current version: `0.5.3`
 
 Location:
 
@@ -20,4 +20,21 @@ Install/update:
 /mnt/us/install-readingdashboard.sh YOUR_GITHUB_USERNAME/koreader-plugins
 ```
 
+### TBR Recommender
+
+Current version: `0.1.2`
+
+Location:
+
+```text
+tbrrecommender.koplugin/
+```
+
+Install/update:
+
+```sh
+/mnt/us/install-tbrrecommender.sh YOUR_GITHUB_USERNAME/koreader-plugins
+```
+
 More plugins can be added alongside it as separate `.koplugin` directories.
+
