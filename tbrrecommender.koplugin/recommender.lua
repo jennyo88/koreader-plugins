@@ -47,6 +47,16 @@ local function normalize_series_name(name)
     return normalized
 end
 
+local function normalize_author(author)
+    if type(author) == "string" then
+        return author:lower()
+    elseif type(author) == "table" then
+        return table.concat(author, ", "):lower()
+    end
+
+    return nil
+end
+
 local function series_index_value(book)
     local value = tonumber(book.series_index)
 
@@ -54,8 +64,21 @@ local function series_index_value(book)
         return value
     end
 
-    -- Books without a usable series index sort after indexed volumes.
     return math.huge
+end
+
+local function progress_percent(book)
+    local p = tonumber(book.percent_finished)
+
+    if not p then
+        return nil
+    end
+
+    if p <= 1 then
+        p = p * 100
+    end
+
+    return p
 end
 
 function Recommender:surpriseMe(books, count)
@@ -115,10 +138,12 @@ function Recommender:quickRead(books, count)
         )
     end
 
-    short =
-        shuffle(short)
+    short = shuffle(short)
 
     for _, book in ipairs(short) do
+        book.recommendation_note =
+            "Shorter read"
+
         table.insert(
             pool,
             book
@@ -142,11 +167,7 @@ function Recommender:quickRead(books, count)
     )
 end
 
--- all_books must include completed books.
---
--- For each series, this selects only the earliest volume that is not
--- marked complete. This prevents later volumes from being recommended
--- while an earlier owned volume is still unread or unfinished.
+-- For each series, only the earliest unfinished volume is eligible.
 function Recommender:continueSeries(all_books, count)
     local grouped = {}
 
@@ -191,7 +212,6 @@ function Recommender:continueSeries(all_books, count)
             end
         )
 
-        -- Only the earliest unfinished volume in this series is eligible.
         for _, book in ipairs(books) do
             if book.status ~= "complete" then
                 book.recommendation_note =
@@ -221,6 +241,9 @@ function Recommender:unopened(books, count)
 
     for _, book in ipairs(books or {}) do
         if not book.been_opened then
+            book.recommendation_note =
+                "Never opened"
+
             table.insert(
                 unopened,
                 book
@@ -230,6 +253,199 @@ function Recommender:unopened(books, count)
 
     return first_n(
         shuffle(unopened),
+        count or 3
+    )
+end
+
+-- Books with real reading progress but not complete.
+function Recommender:continueStarted(books, count)
+    local started = {}
+
+    for _, book in ipairs(books or {}) do
+        local progress =
+            progress_percent(book)
+
+        if book.been_opened
+            and book.status ~= "complete"
+            and progress
+            and progress > 0
+            and progress < 100 then
+
+            book.recommendation_note =
+                string.format(
+                    "Continue at %.0f%%",
+                    progress
+                )
+
+            table.insert(
+                started,
+                book
+            )
+        end
+    end
+
+    -- Prefer books with the most progress so finishing one feels achievable.
+    table.sort(
+        started,
+        function(a, b)
+            return
+                (progress_percent(a) or 0)
+                >
+                (progress_percent(b) or 0)
+        end
+    )
+
+    return first_n(
+        started,
+        count or 3
+    )
+end
+
+-- Try to offer books that are unlike what the reader already has in progress.
+-- We avoid authors and series represented among currently-started books.
+function Recommender:somethingDifferent(books, count)
+    local active_authors = {}
+    local active_series = {}
+
+    for _, book in ipairs(books or {}) do
+        local progress =
+            progress_percent(book)
+
+        if book.been_opened
+            and book.status ~= "complete"
+            and progress
+            and progress > 0
+            and progress < 100 then
+
+            local author =
+                normalize_author(
+                    book.authors
+                )
+
+            if author then
+                active_authors[author] =
+                    true
+            end
+
+            local series =
+                normalize_series_name(
+                    book.series
+                )
+
+            if series then
+                active_series[
+                    series:lower()
+                ] = true
+            end
+        end
+    end
+
+    local different = {}
+
+    for _, book in ipairs(books or {}) do
+        if not book.been_opened then
+            local author =
+                normalize_author(
+                    book.authors
+                )
+
+            local series =
+                normalize_series_name(
+                    book.series
+                )
+
+            local same_author =
+                author
+                and active_authors[author]
+
+            local same_series =
+                series
+                and active_series[
+                    series:lower()
+                ]
+
+            if not same_author
+                and not same_series then
+
+                book.recommendation_note =
+                    "Something different"
+
+                table.insert(
+                    different,
+                    book
+                )
+            end
+        end
+    end
+
+    -- If metadata is sparse, fall back to unopened books.
+    if #different == 0 then
+        return self:unopened(
+            books,
+            count
+        )
+    end
+
+    return first_n(
+        shuffle(different),
+        count or 3
+    )
+end
+
+-- A gentler short-read mode:
+-- prefer unopened books among the shorter half of known page counts.
+function Recommender:shortAndEasy(books, count)
+    local candidates = {}
+
+    for _, book in ipairs(books or {}) do
+        if not book.been_opened
+            and type(book.pages) == "number"
+            and book.pages > 0 then
+
+            table.insert(
+                candidates,
+                book
+            )
+        end
+    end
+
+    table.sort(
+        candidates,
+        function(a, b)
+            return a.pages < b.pages
+        end
+    )
+
+    local half =
+        math.max(
+            1,
+            math.ceil(#candidates / 2)
+        )
+
+    local shorter = {}
+
+    for i = 1, half do
+        local book =
+            candidates[i]
+
+        book.recommendation_note =
+            "Short & easy pick"
+
+        table.insert(
+            shorter,
+            book
+        )
+    end
+
+    if #shorter == 0 then
+        return self:quickRead(
+            books,
+            count
+        )
+    end
+
+    return first_n(
+        shuffle(shorter),
         count or 3
     )
 end

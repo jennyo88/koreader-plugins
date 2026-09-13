@@ -4,81 +4,45 @@ A personal KOReader plugin that recommends books already on your Kindle.
 
 ## Version
 
-`0.1.3`
+`0.2.0`
 
-## Library location
+## Library
 
-The plugin scans:
+Scans recursively:
 
 ```text
 /mnt/us/koreader/books
 ```
 
-## Modes
+## Recommendation modes
 
-- **Surprise Me**
-- **Quick Read**
-- **Continue a Series**
-- **Unopened Books**
+- **Surprise Me** — random unfinished books.
+- **Quick Read** — favors shorter known page counts.
+- **Continue a Series** — only the earliest unfinished owned volume in each series.
+- **Continue Something Started** — books with real reading progress, favoring books closest to completion.
+- **Something Different** — unopened books that avoid authors and series represented among books currently in progress, when metadata is available.
+- **Short & Easy** — unopened books from the shorter half of known page counts.
+- **Unopened Books** — books KOReader has not recorded as opened.
 
-## Updater
+## Recommendation card
 
-The plugin can now update itself from:
+v0.2.0 replaces the plain result box with a custom e-ink-friendly card.
 
-```text
-Tools → TBR Recommender → Check for Updates
-```
+Each recommendation is tappable and shows available metadata such as author, page count, series, and the reason it was selected.
 
-It also keeps a backup of the previous version and supports:
+The card includes:
 
-```text
-Restore Previous Version
-```
+- **Pick Again**
+- **Close**
 
-After an update or restore, it offers:
+## Series safety
 
-```text
-Restart later
-Restart now
-```
+Continue a Series never recommends a later owned volume while an earlier owned volume is still unfinished.
 
-## Current limitations
+## Updates
 
-- EPUB only.
-- Finished books are excluded when KOReader marks them `complete`.
-- Unopened books may have less metadata until KOReader has cached information.
-- Recommendations are not yet tappable.
+Use:
 
+**Tools → TBR Recommender → Check for Updates**
 
-## Tappable recommendations
-
-Recommendations are now shown as buttons.
-
-- Tap a book to open it directly in KOReader.
-- **Pick Again** generates another set of three using the same mode.
-- **Close** dismisses the recommendation window.
-
-
-## Smarter Continue a Series
-
-`Continue a Series` now looks at completed and unfinished volumes together.
-
-For each series it:
-
-1. Sorts owned books by series number.
-2. Skips volumes KOReader marks `complete`.
-3. Recommends only the earliest volume that is not complete.
-4. Never recommends a later owned volume while an earlier owned volume is still unfinished.
-
-Example:
-
-```text
-Book 1 — complete
-Book 2 — complete
-Book 3 — unread
-Book 4 — unread
-```
-
-Only **Book 3** is eligible.
-
-Series recommendations are labeled **Next unread volume**.
+Updates are staged, the previous version is backed up, and KOReader offers **Restart now / Restart later** after installation.
