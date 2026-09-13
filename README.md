@@ -36,7 +36,7 @@ Install/update:
 /mnt/us/install-tbrrecommender.sh YOUR_GITHUB_USERNAME/koreader-plugins
 ```
 
-### Reading Brain v0.2.1
+### Reading Brain v0.4.0
 
 Upload these files to `readingbrain.koplugin/`:
 
@@ -46,22 +46,22 @@ Upload these files to `readingbrain.koplugin/`:
 - `library.lua`
 - `stats.lua`
 - `brain.lua`
+- `discovery.lua`
+- `update_notifier.lua`
 - `updater.lua`
 - `README.md`
 
 Upload `install-readingbrain.sh` to the repository root.
 
-In the root `manifest.json`, update the existing `readingbrain` entry to the contents of `manifest-readingbrain-entry.json`.
+Update the existing `readingbrain` entry in the root `manifest.json` to the contents of `manifest-readingbrain-entry.json`.
 
-Do not overwrite the other plugin entries.
+Important: both `discovery.lua` and `update_notifier.lua` must exist on GitHub before changing the manifest to 0.4.0, otherwise the updater will receive an HTTP 404.
 
-After these files are on GitHub, Reading Brain v0.1.1 can install v0.2.0 through:
+Once everything is uploaded:
 
 ```text
 Tools → Reading Brain → Check for Updates
 ```
-
-
 
 More plugins can be added alongside it as separate `.koplugin` directories.
 
