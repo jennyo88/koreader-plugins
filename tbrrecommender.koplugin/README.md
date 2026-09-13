@@ -4,7 +4,7 @@ A personal KOReader plugin that recommends books already on your Kindle.
 
 ## Version
 
-`0.2.0`
+`0.2.1`
 
 ## Library
 
