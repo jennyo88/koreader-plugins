@@ -92,6 +92,10 @@ function Brain:upsertBook(db, book)
 end
 
 function Brain:insertSession(db, session)
+    if (tonumber(session.duration) or 0) <= 0 then
+        return false
+    end
+
     local sid = session_id(
         session.source,
         session.book_key,
@@ -116,6 +120,7 @@ function Brain:insertSession(db, session)
     ):step()
 
     stmt:close()
+    return true
 end
 
 function Brain:setMeta(db, key, value)
@@ -157,8 +162,8 @@ function Brain:getSummary()
     local result = {
         books = scalar(db, "SELECT count(*) FROM books;"),
         matched = scalar(db, "SELECT count(*) FROM books WHERE matched = 1;"),
-        sessions = scalar(db, "SELECT count(*) FROM sessions;"),
-        seconds = scalar(db, "SELECT coalesce(sum(duration), 0) FROM sessions;"),
+        sessions = scalar(db, "SELECT count(*) FROM sessions WHERE duration > 0;"),
+        seconds = scalar(db, "SELECT coalesce(sum(duration), 0) FROM sessions WHERE duration > 0;"),
         kindle_seconds = scalar(db, "SELECT coalesce(sum(duration), 0) FROM sessions WHERE medium = 'Kindle';"),
         audio_seconds = scalar(db, "SELECT coalesce(sum(duration), 0) FROM sessions WHERE medium = 'Audiobook';"),
         hybrid_seconds = scalar(db, "SELECT coalesce(sum(duration), 0) FROM sessions WHERE medium = 'External/Hybrid';"),
@@ -186,6 +191,7 @@ function Brain:getRecentSessions(limit)
         FROM sessions s
         LEFT JOIN books b
           ON b.book_key = s.book_key
+        WHERE s.duration > 0
         ORDER BY s.start_time DESC
         LIMIT ?;
     ]])

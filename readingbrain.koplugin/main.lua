@@ -13,6 +13,7 @@ local Geom = require("ui/geometry")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local LineWidget = require("ui/widget/linewidget")
 local Size = require("ui/size")
+local ScrollTextWidget = require("ui/widget/scrolltextwidget")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
 local VerticalGroup = require("ui/widget/verticalgroup")
@@ -21,7 +22,7 @@ local _ = require("gettext")
 
 local Screen = Device.screen
 
-local PLUGIN_VERSION = "0.5.6"
+local PLUGIN_VERSION = "0.5.7"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -128,13 +129,41 @@ function StatsDialog:init()
                 },
         }
 
-    local body_widget =
-        TextBoxWidget:new{
-            text = self.body,
-            face = body_face,
-            width = content_width,
-            alignment = "left",
-        }
+    local line_count = 1
+
+    for _ in tostring(self.body):gmatch("\n") do
+        line_count = line_count + 1
+    end
+
+    local use_scroll =
+        line_count > 12
+        or #tostring(self.body) > 900
+
+    local body_widget
+
+    if use_scroll then
+        body_widget =
+            ScrollTextWidget:new{
+                text = self.body,
+                face = body_face,
+                width = content_width,
+                height =
+                    math.floor(
+                        Screen:getHeight()
+                        * 0.55
+                    ),
+                alignment = "left",
+                dialog = self,
+            }
+    else
+        body_widget =
+            TextBoxWidget:new{
+                text = self.body,
+                face = body_face,
+                width = content_width,
+                alignment = "left",
+            }
+    end
 
     local buttons =
         ButtonTable:new{
@@ -421,11 +450,13 @@ function ReadingBrain:syncUnifiedHistory()
             for _, session in ipairs(
                 Bookmory:getSessions(bm)
             ) do
-                session.book_key = key
-                Brain:insertSession(
-                    brain_db,
-                    session
-                )
+                if (tonumber(session.duration) or 0) > 0 then
+                    session.book_key = key
+                    Brain:insertSession(
+                        brain_db,
+                        session
+                    )
+                end
             end
         end
     end
@@ -441,7 +472,9 @@ function ReadingBrain:syncUnifiedHistory()
                     session.authors
                 )
 
-            if key then
+            if key
+                and (tonumber(session.duration) or 0) > 0 then
+
                 Brain:upsertBook(brain_db, {
                     book_key = key,
                     title = session.title or "Untitled",

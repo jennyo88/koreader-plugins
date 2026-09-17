@@ -71,3 +71,27 @@ The card-style interface is now applied safely to:
 - Stats & Patterns
 
 Discover Books keeps its tappable recommendation list. Progress messages and error notices remain lightweight KOReader messages.
+
+
+## v0.5.7
+
+Two fixes:
+
+### Scrollable long cards
+
+Long Reading Brain card screens, especially **Recent Sessions**, now use a fixed-height scrollable body. The title and **Close** button remain on-screen, so a long session list can no longer push the button below the Kindle display.
+
+Short screens still use the normal compact card.
+
+### Ignore zero-length sessions
+
+Reading Brain now ignores sessions whose duration is `0` seconds.
+
+This is useful when a book is briefly opened only so another plugin can detect its page count. Those bookkeeping opens are no longer treated as actual reading sessions.
+
+Filtering is applied in three places:
+- new Bookmory imports
+- new KOReader imports
+- summary/recent-session queries for an existing Reading Brain database
+
+Running **Sync Unified History** once after installing v0.5.7 will rebuild the cache without zero-length sessions.
