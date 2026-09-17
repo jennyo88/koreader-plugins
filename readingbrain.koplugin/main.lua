@@ -5,11 +5,7 @@ local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
-<<<<<<< HEAD
 local PLUGIN_VERSION = "0.5.0"
-=======
-local PLUGIN_VERSION = "0.4.0"
->>>>>>> bc9c6802435641f0095d2b252f628b341e0b0eef
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -28,10 +24,7 @@ local Stats = dofile(plugin_dir .. "/stats.lua")
 local Brain = dofile(plugin_dir .. "/brain.lua")
 local Discovery = dofile(plugin_dir .. "/discovery.lua")
 local UpdateNotifier = dofile(plugin_dir .. "/update_notifier.lua")
-<<<<<<< HEAD
 local StatsPatterns = dofile(plugin_dir .. "/stats_patterns.lua")
-=======
->>>>>>> bc9c6802435641f0095d2b252f628b341e0b0eef
 
 local function loadUpdater()
     local updater_path = plugin_dir .. "/updater.lua"
@@ -717,27 +710,20 @@ function ReadingBrain:discoverBooks()
         }
     )
 
-<<<<<<< HEAD
     local using_cache =
         recommendations[1]
         and recommendations[1].used_cache
 
-=======
->>>>>>> bc9c6802435641f0095d2b252f628b341e0b0eef
     self.discovery_dialog =
         ButtonDialog:new{
             title =
                 _("DISCOVER BOOKS")
                 .. "\n"
-<<<<<<< HEAD
                 .. (
                     using_cache
                     and _("Cached results • based on your Bookmory ratings")
                     or _("Based on your Bookmory ratings")
                 ),
-=======
-                .. _("Based on your Bookmory ratings"),
->>>>>>> bc9c6802435641f0095d2b252f628b341e0b0eef
 
             title_align =
                 "center",
@@ -751,7 +737,6 @@ function ReadingBrain:discoverBooks()
     )
 end
 
-<<<<<<< HEAD
 
 function ReadingBrain:withStatsContext(callback)
     local books, err = self:loadBookmoryBooks()
@@ -794,8 +779,6 @@ function ReadingBrain:showReadingRecords()
     self:withStatsContext(function(books) self:showStatsText("READING RECORDS", StatsPatterns:readingRecords(books)) end)
 end
 
-=======
->>>>>>> bc9c6802435641f0095d2b252f628b341e0b0eef
 function ReadingBrain:addToMainMenu(menu_items)
     menu_items.reading_brain = {
         text = _("Reading Brain"),
@@ -817,7 +800,6 @@ function ReadingBrain:addToMainMenu(menu_items)
             },
 
             {
-<<<<<<< HEAD
                 text = _("Stats & Patterns"),
                 sub_item_table = {
                     { text = _("This Year"), callback = function() self:showThisYear() end },
@@ -832,8 +814,6 @@ function ReadingBrain:addToMainMenu(menu_items)
             },
 
             {
-=======
->>>>>>> bc9c6802435641f0095d2b252f628b341e0b0eef
                 text = _("Sync Unified History"),
                 callback = function()
                     self:confirmRebuild()
@@ -960,11 +940,7 @@ function ReadingBrain:addToMainMenu(menu_items)
                             "Reading Brain v"
                             .. PLUGIN_VERSION
                             .. "\n\n"
-<<<<<<< HEAD
                             .. "Unified reading history, book discovery, visual statistics, and reading-pattern analysis.\n\n"
-=======
-                            .. "Unified reading history + book discovery from your Bookmory ratings.\n\n"
->>>>>>> bc9c6802435641f0095d2b252f628b341e0b0eef
                             .. "Reading Brain writes only to:\n"
                             .. "/mnt/us/readingbrain/readingbrain.sqlite3\n\n"
                             .. "It never writes to KOReader's statistics.sqlite3 or your Bookmory backup.\n\n"
