@@ -21,7 +21,7 @@ local _ = require("gettext")
 
 local Screen = Device.screen
 
-local PLUGIN_VERSION = "0.5.5"
+local PLUGIN_VERSION = "0.5.6"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -497,37 +497,36 @@ function ReadingBrain:syncUnifiedHistory()
             "\n\nKOReader statistics database was not available yet."
     end
 
-    UIManager:show(InfoMessage:new{
-        text =
-            "READING BRAIN SYNC COMPLETE\n\n"
-            .. "Bookmory backup\n"
-            .. short_path(backup)
-            .. "\n\n"
-            .. string.format(
-                "Bookmory books processed ... %d\n",
-                imported_bookmory
+    self:showCardDialog(
+        "SYNC COMPLETE",
+        "Bookmory backup\n"
+        .. short_path(backup)
+        .. "\n\n"
+        .. string.format(
+            "Bookmory books processed ... %d\n",
+            imported_bookmory
+        )
+        .. string.format(
+            "Matched to Kindle .......... %d\n",
+            matched_bookmory
+        )
+        .. string.format(
+            "KOReader sessions .......... %d\n",
+            imported_koreader_sessions
+        )
+        .. string.format(
+            "Unified sessions ........... %d\n",
+            summary and summary.sessions or 0
+        )
+        .. string.format(
+            "Unified reading time ....... %s",
+            hours_minutes(
+                summary and summary.seconds or 0
             )
-            .. string.format(
-                "Matched to Kindle .......... %d\n",
-                matched_bookmory
-            )
-            .. string.format(
-                "KOReader sessions .......... %d\n",
-                imported_koreader_sessions
-            )
-            .. string.format(
-                "Unified sessions ........... %d\n",
-                summary and summary.sessions or 0
-            )
-            .. string.format(
-                "Unified reading time ....... %s",
-                hours_minutes(
-                    summary and summary.seconds or 0
-                )
-            )
-            .. stats_note
-            .. "\n\nKOReader statistics were read only and were not modified.",
-    })
+        )
+        .. stats_note
+        .. "\n\nKOReader statistics were read only and were not modified."
+    )
 end
 
 function ReadingBrain:showSummary()
@@ -535,49 +534,48 @@ function ReadingBrain:showSummary()
         Brain:getSummary()
 
     if not summary then
-        UIManager:show(InfoMessage:new{
-            text =
-                "Reading Brain has not been synced yet.\n\n"
-                .. "Choose:\n"
-                .. "Sync Unified History",
-        })
+        self:showCardDialog(
+            "UNIFIED SUMMARY",
+            "Reading Brain has not been synced yet.\n\n"
+            .. "Choose:\n"
+            .. "Sync Unified History"
+        )
         return
     end
 
-    UIManager:show(InfoMessage:new{
-        text =
-            "UNIFIED READING HISTORY\n\n"
-            .. string.format(
-                "Books .............. %d\n",
-                summary.books
-            )
-            .. string.format(
-                "Matched books ...... %d\n",
-                summary.matched
-            )
-            .. string.format(
-                "Sessions ........... %d\n\n",
-                summary.sessions
-            )
-            .. "READING TIME\n"
-            .. string.format(
-                "Kindle ............. %s\n",
-                hours_minutes(summary.kindle_seconds)
-            )
-            .. string.format(
-                "Audiobook .......... %s\n",
-                hours_minutes(summary.audio_seconds)
-            )
-            .. string.format(
-                "External/Hybrid .... %s\n",
-                hours_minutes(summary.hybrid_seconds)
-            )
-            .. "────────────────────\n"
-            .. string.format(
-                "Combined ........... %s",
-                hours_minutes(summary.seconds)
-            ),
-    })
+    self:showCardDialog(
+        "UNIFIED SUMMARY",
+        string.format(
+            "Books .............. %d\n",
+            summary.books
+        )
+        .. string.format(
+            "Matched books ...... %d\n",
+            summary.matched
+        )
+        .. string.format(
+            "Sessions ........... %d\n\n",
+            summary.sessions
+        )
+        .. "READING TIME\n"
+        .. string.format(
+            "Kindle ............. %s\n",
+            hours_minutes(summary.kindle_seconds)
+        )
+        .. string.format(
+            "Audiobook .......... %s\n",
+            hours_minutes(summary.audio_seconds)
+        )
+        .. string.format(
+            "External/Hybrid .... %s\n",
+            hours_minutes(summary.hybrid_seconds)
+        )
+        .. "────────────────────\n"
+        .. string.format(
+            "Combined ........... %s",
+            hours_minutes(summary.seconds)
+        )
+    )
 end
 
 function ReadingBrain:showRecentSessions()
@@ -585,8 +583,10 @@ function ReadingBrain:showRecentSessions()
         Brain:getRecentSessions(18)
 
     if #sessions == 0 then
-        self:showCardDialog("RECENT SESSIONS", "No unified sessions yet.\n\n"
-                .. "Run Sync Unified History first.",
+        self:showCardDialog(
+            "RECENT SESSIONS",
+            "No unified sessions yet.\n\n"
+            .. "Run Sync Unified History first."
         )
         return
     end
@@ -616,9 +616,10 @@ function ReadingBrain:showRecentSessions()
         )
     end
 
-    UIManager:show(InfoMessage:new{
-        text = table.concat(lines, "\n"),
-    })
+    self:showCardDialog(
+        "RECENT SESSIONS",
+        table.concat(lines, "\n")
+    )
 end
 
 function ReadingBrain:confirmRebuild()
@@ -687,9 +688,11 @@ function ReadingBrain:showTasteProfile()
         self:loadBookmoryBooks()
 
     if not books then
-        self:showCardDialog("TASTE PROFILE", "Could not build taste profile.\n\n"
-                    .. tostring(err),
-            )
+        self:showCardDialog(
+            "TASTE PROFILE",
+            "Could not build taste profile.\n\n"
+            .. tostring(err)
+        )
 
         return
     end
@@ -699,13 +702,11 @@ function ReadingBrain:showTasteProfile()
             books
         )
 
-    UIManager:show(
-        InfoMessage:new{
-            text =
-                Discovery:profileText(
-                    profile
-                ),
-        }
+    self:showCardDialog(
+        "TASTE PROFILE",
+        Discovery:profileText(
+            profile
+        )
     )
 end
 
@@ -830,37 +831,33 @@ function ReadingBrain:discoverBooks()
                                 )
                                 or "Strong overall taste match"
 
-                            UIManager:show(
-                                InfoMessage:new{
-                                    text =
-                                        tostring(
-                                            selected.title
-                                            or "Unknown title"
-                                        )
-                                        .. "\n\n"
-                                        .. (
-                                            author ~= ""
-                                            and author
-                                            or "Unknown author"
-                                        )
-                                        .. (
-                                            selected.year
-                                            and (
-                                                "\nFirst published: "
-                                                .. tostring(
-                                                    selected.year
-                                                )
-                                            )
-                                            or ""
-                                        )
-                                        .. "\n\nWHY READING BRAIN PICKED IT\n"
-                                        .. reason
-                                        .. "\n\nOpen Library work:\n"
+                            self:showCardDialog(
+                                tostring(
+                                    selected.title
+                                    or "BOOK MATCH"
+                                ),
+                                (
+                                    author ~= ""
+                                    and author
+                                    or "Unknown author"
+                                )
+                                .. (
+                                    selected.year
+                                    and (
+                                        "\nFirst published: "
                                         .. tostring(
-                                            selected.key
-                                            or "Unknown"
-                                        ),
-                                }
+                                            selected.year
+                                        )
+                                    )
+                                    or ""
+                                )
+                                .. "\n\nWHY READING BRAIN PICKED IT\n"
+                                .. reason
+                                .. "\n\nOpen Library work:\n"
+                                .. tostring(
+                                    selected.key
+                                    or "Unknown"
+                                )
                             )
                         end,
                 },

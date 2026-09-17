@@ -56,3 +56,18 @@ The goal is one consistent Reading Brain interface:
 - same spacing
 - same Close button
 - same e-ink-friendly black-and-white presentation
+
+
+## v0.5.6 hotfix
+
+Fixes the v0.5.5 Lua syntax error that prevented Reading Brain from loading.
+
+The card-style interface is now applied safely to:
+- Sync Unified History completion
+- Unified Summary
+- Recent Sessions
+- Taste Profile
+- selected Discover Books details
+- Stats & Patterns
+
+Discover Books keeps its tappable recommendation list. Progress messages and error notices remain lightweight KOReader messages.
