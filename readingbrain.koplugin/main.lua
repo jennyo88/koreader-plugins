@@ -5,7 +5,7 @@ local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
 
-local PLUGIN_VERSION = "0.5.1"
+local PLUGIN_VERSION = "0.5.2"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
