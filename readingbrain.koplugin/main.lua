@@ -21,7 +21,7 @@ local _ = require("gettext")
 
 local Screen = Device.screen
 
-local PLUGIN_VERSION = "0.5.3"
+local PLUGIN_VERSION = "0.5.4"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -295,17 +295,11 @@ function ReadingBrain:init()
         self.ui.menu:registerToMainMenu(self)
     end
 
-    self.update_notifier:scheduleStartupCheck()
 end
 
 function ReadingBrain:onResume()
     if self.update_notifier then
-        UIManager:scheduleIn(
-            6,
-            function()
-                self.update_notifier:checkIfDue()
-            end
-        )
+        self.update_notifier:onWake()
     end
 end
 
@@ -1110,7 +1104,7 @@ function ReadingBrain:addToMainMenu(menu_items)
             },
 
             {
-                text = _("Notify when an update is available"),
+                text = _("Notify on wake when update available"),
                 checked_func = function()
                     return
                         self.update_notifier

@@ -13,7 +13,10 @@ local UpdateNotifier = {}
 local MANIFEST_URL =
     "https://raw.githubusercontent.com/jennyo88/koreader-plugins/main/manifest.json"
 
-local CHECK_INTERVAL = 12 * 60 * 60
+-- Match Bookshelf-style behavior:
+-- at most one background check per hour, and only after a wake.
+local CHECK_INTERVAL = 60 * 60
+local WAKE_DELAY = 6
 
 local function parse_version(version)
     local result = {}
@@ -65,6 +68,7 @@ local function fetch_manifest()
         headers = {
             ["User-Agent"] = "KOReader-ReadingBrain-Notifier",
             ["Accept"] = "application/json",
+            ["Connection"] = "close",
         },
     }
 
@@ -116,23 +120,18 @@ function UpdateNotifier:new(args)
 end
 
 function UpdateNotifier:isEnabled()
-    if not self.settings:has("enabled") then
-        self.settings:saveSetting(
-            "enabled",
-            true
-        ):flush()
-    end
-
-    return self.settings:nilOrFalse(
-        "enabled"
-    )
+    -- Opt-in, like Bookshelf. Missing setting means OFF.
+    return self.settings:isTrue("enabled")
 end
 
 function UpdateNotifier:setEnabled(enabled)
-    self.settings:saveSetting(
-        "enabled",
-        enabled and true or false
-    ):flush()
+    if enabled then
+        self.settings:makeTrue("enabled")
+    else
+        self.settings:makeFalse("enabled")
+    end
+
+    self.settings:flush()
 end
 
 function UpdateNotifier:isDue()
@@ -177,6 +176,7 @@ function UpdateNotifier:checkIfDue()
             self.checking = false
 
             if not manifest then
+                -- A failed network request does not consume the hourly check.
                 return
             end
 
@@ -213,9 +213,13 @@ function UpdateNotifier:checkIfDue()
     )
 end
 
-function UpdateNotifier:scheduleStartupCheck()
+function UpdateNotifier:onWake()
+    if not self:isEnabled() then
+        return
+    end
+
     UIManager:scheduleIn(
-        6,
+        WAKE_DELAY,
         function()
             self:checkIfDue()
         end
