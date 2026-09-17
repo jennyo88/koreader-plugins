@@ -3,9 +3,25 @@ local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local Blitbuffer = require("ffi/blitbuffer")
+local ButtonTable = require("ui/widget/buttontable")
+local CenterContainer = require("ui/widget/container/centercontainer")
+local Device = require("device")
+local Font = require("ui/font")
+local FrameContainer = require("ui/widget/container/framecontainer")
+local Geom = require("ui/geometry")
+local InputContainer = require("ui/widget/container/inputcontainer")
+local LineWidget = require("ui/widget/linewidget")
+local Size = require("ui/size")
+local TextBoxWidget = require("ui/widget/textboxwidget")
+local TextWidget = require("ui/widget/textwidget")
+local VerticalGroup = require("ui/widget/verticalgroup")
+local VerticalSpan = require("ui/widget/verticalspan")
 local _ = require("gettext")
 
-local PLUGIN_VERSION = "0.5.2"
+local Screen = Device.screen
+
+local PLUGIN_VERSION = "0.5.3"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -54,6 +70,185 @@ local function loadUpdater()
     return updater_or_error
 end
 
+
+local StatsDialog =
+    InputContainer:extend{
+        title = "",
+        body = "",
+        owner = nil,
+    }
+
+function StatsDialog:init()
+    local card_width =
+        math.floor(
+            Screen:getWidth()
+            * 0.90
+        )
+
+    local content_width =
+        card_width
+        - Screen:scaleBySize(44)
+
+    local title_face =
+        Font:getFace(
+            "cfont",
+            21
+        )
+
+    local body_face =
+        Font:getFace(
+            "cfont",
+            15
+        )
+
+    local small_face =
+        Font:getFace(
+            "cfont",
+            13
+        )
+
+    local title_widget =
+        TextBoxWidget:new{
+            text = self.title,
+            face = title_face,
+            width = content_width,
+            alignment = "center",
+            bold = true,
+        }
+
+    local divider =
+        LineWidget:new{
+            background =
+                Blitbuffer.COLOR_DARK_GRAY,
+
+            dimen =
+                Geom:new{
+                    w = content_width,
+                    h = Screen:scaleBySize(1),
+                },
+        }
+
+    local body_widget =
+        TextBoxWidget:new{
+            text = self.body,
+            face = body_face,
+            width = content_width,
+            alignment = "left",
+        }
+
+    local buttons =
+        ButtonTable:new{
+            width = content_width,
+            buttons = {
+                {
+                    {
+                        text = _("Close"),
+                        callback =
+                            function()
+                                if self.owner then
+                                    self.owner:closeStatsDialog()
+                                else
+                                    UIManager:close(self)
+                                end
+                            end,
+                    },
+                },
+            },
+        }
+
+    local hint =
+        TextWidget:new{
+            text = _("Reading Brain"),
+            face = small_face,
+            fgcolor =
+                Blitbuffer.COLOR_DARK_GRAY,
+        }
+
+    local content =
+        VerticalGroup:new{
+            align = "center",
+
+            title_widget,
+
+            VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(10),
+            },
+
+            divider,
+
+            VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(14),
+            },
+
+            body_widget,
+
+            VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(16),
+            },
+
+            buttons,
+
+            VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(8),
+            },
+
+            hint,
+        }
+
+    local card =
+        FrameContainer:new{
+            padding =
+                Screen:scaleBySize(22),
+
+            bordersize =
+                Screen:scaleBySize(2),
+
+            radius =
+                Size.radius.window,
+
+            background =
+                Blitbuffer.COLOR_WHITE,
+
+            content,
+        }
+
+    self.card = card
+
+    self[1] =
+        CenterContainer:new{
+            dimen =
+                Screen:getSize(),
+
+            card,
+        }
+end
+
+function StatsDialog:onShow()
+    UIManager:setDirty(
+        self,
+        function()
+            return
+                "flashui",
+                self.card.dimen
+        end
+    )
+end
+
+function StatsDialog:onCloseWidget()
+    UIManager:setDirty(
+        nil,
+        function()
+            return
+                "ui",
+                self.card.dimen
+        end
+    )
+end
+
 local ReadingBrain = WidgetContainer:extend{
     name = "readingbrain",
     is_doc_only = false,
@@ -87,6 +282,7 @@ end
 
 function ReadingBrain:init()
     self.discovery_dialog = nil
+    self.stats_dialog = nil
 
     self.update_notifier =
         UpdateNotifier:new{
@@ -750,8 +946,29 @@ function ReadingBrain:withStatsContext(callback)
     end
 end
 
+function ReadingBrain:closeStatsDialog()
+    if self.stats_dialog then
+        UIManager:close(
+            self.stats_dialog
+        )
+
+        self.stats_dialog = nil
+    end
+end
+
 function ReadingBrain:showStatsText(title, text)
-    UIManager:show(InfoMessage:new{ text = title .. "\n\n" .. text })
+    self:closeStatsDialog()
+
+    self.stats_dialog =
+        StatsDialog:new{
+            title = title,
+            body = text,
+            owner = self,
+        }
+
+    UIManager:show(
+        self.stats_dialog
+    )
 end
 
 function ReadingBrain:showThisYear()

@@ -1,16 +1,16 @@
-# Reading Brain v0.5.2
+# Reading Brain v0.5.3
 
-Hotfix release for the Stats & Patterns update.
+Stats UI cleanup.
 
-This version keeps the known-working v0.5.0 plugin structure and only cleans the visual presentation of the existing stats screens.
+The Stats & Patterns screens now use a custom card-style dialog modeled after the TBR Recommender instead of KOReader's large InfoMessage text.
 
 Changes:
-- shorter e-ink bars
-- lighter empty-bar markers
-- tighter monthly charts
-- tighter habits charts
-- compact ratings distribution
-- no new stats dependencies
-- no menu-structure changes
+- smaller 15pt stat text
+- centered 21pt title
+- framed white card
+- thin divider
+- cleaner margins and spacing
+- dedicated Close button
+- e-ink-friendly black-and-white presentation
 
-All Reading Brain v0.5.0 features remain intact.
+No stats calculations changed in this release.
