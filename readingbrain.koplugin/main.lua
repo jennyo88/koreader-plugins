@@ -22,7 +22,7 @@ local _ = require("gettext")
 
 local Screen = Device.screen
 
-local PLUGIN_VERSION = "0.5.7"
+local PLUGIN_VERSION = "0.6.0"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -1022,6 +1022,209 @@ function ReadingBrain:showReadingRecords()
     self:withStatsContext(function(books) self:showStatsText("READING RECORDS", StatsPatterns:readingRecords(books)) end)
 end
 
+
+function ReadingBrain:showReadingOverview()
+    local summary =
+        Brain:getSummary()
+
+    if not summary then
+        self:showCardDialog(
+            "READING OVERVIEW",
+            "Reading Brain has not been synced yet.\n\n"
+            .. "Choose Data & Sync → Sync Reading History."
+        )
+        return
+    end
+
+    self:withStatsContext(
+        function(books)
+            local body =
+                "ALL TIME\n"
+                .. string.format(
+                    "Books .............. %d\n",
+                    summary.books
+                )
+                .. string.format(
+                    "Matched ............ %d\n",
+                    summary.matched
+                )
+                .. string.format(
+                    "Sessions ........... %d\n",
+                    summary.sessions
+                )
+                .. string.format(
+                    "Reading time ....... %s\n\n",
+                    hours_minutes(summary.seconds)
+                )
+                .. "FORMAT MIX\n"
+                .. StatsPatterns:readingFormats(books)
+                .. "\n\nTHIS YEAR\n"
+                .. StatsPatterns:thisYear(books)
+
+            self:showCardDialog(
+                "READING OVERVIEW",
+                body
+            )
+        end
+    )
+end
+
+function ReadingBrain:showRatingsAndTaste()
+    self:withStatsContext(
+        function(books)
+            self:showCardDialog(
+                "RATINGS & TASTE",
+                StatsPatterns:ratings(books)
+                .. "\n\n────────────────────\n\n"
+                .. StatsPatterns:authorsAndGenres(books)
+            )
+        end
+    )
+end
+
+function ReadingBrain:showPatternsAndRecords()
+    self:withStatsContext(
+        function(books)
+            self:showCardDialog(
+                "PATTERNS & RECORDS",
+                StatsPatterns:interestingPatterns(books)
+                .. "\n\n────────────────────\n\n"
+                .. StatsPatterns:readingRecords(books)
+            )
+        end
+    )
+end
+
+function ReadingBrain:showDataStatus()
+    local backup =
+        Bookmory:findLatestBackup()
+
+    if not backup then
+        self:showCardDialog(
+            "DATA STATUS",
+            "No .bookmory backup was found.\n\n"
+            .. "Expected folder:\n"
+            .. "/mnt/us/readingbrain/"
+        )
+        return
+    end
+
+    local db_path, err =
+        Bookmory:extractDatabase(backup)
+
+    if not db_path then
+        self:showCardDialog(
+            "DATA STATUS",
+            "Could not read the Bookmory backup.\n\n"
+            .. tostring(err)
+        )
+        return
+    end
+
+    local books, read_err =
+        Bookmory:readBooks(db_path)
+
+    if not books then
+        Bookmory:cleanup(db_path)
+
+        self:showCardDialog(
+            "DATA STATUS",
+            tostring(read_err)
+        )
+        return
+    end
+
+    local bm =
+        Bookmory:summarize(books)
+
+    local kindle =
+        Library:getBooks()
+
+    local matches =
+        Library:matchBookmory(
+            books,
+            kindle
+        )
+
+    Bookmory:cleanup(db_path)
+
+    local summary =
+        Brain:getSummary()
+
+    local sync_text =
+        summary
+        and (
+            "\n\nUNIFIED CACHE\n"
+            .. string.format(
+                "Books ............... %d\n",
+                summary.books
+            )
+            .. string.format(
+                "Sessions ............ %d\n",
+                summary.sessions
+            )
+            .. string.format(
+                "Reading time ........ %s",
+                hours_minutes(
+                    summary.seconds
+                )
+            )
+        )
+        or "\n\nUNIFIED CACHE\nNot synced yet."
+
+    self:showCardDialog(
+        "DATA STATUS",
+        "BOOKMORY\n"
+        .. short_path(backup)
+        .. "\n\n"
+        .. string.format(
+            "Books ............... %d\n",
+            bm.books
+        )
+        .. string.format(
+            "Timed sessions ...... %d\n",
+            bm.sessions
+        )
+        .. string.format(
+            "Logged time ......... %s\n\n",
+            hours_minutes(
+                bm.seconds
+            )
+        )
+        .. "KINDLE MATCHING\n"
+        .. string.format(
+            "EPUBs ............... %d\n",
+            #kindle
+        )
+        .. string.format(
+            "Matched ............. %d\n",
+            matches.matched
+        )
+        .. string.format(
+            "Needs review ........ %d\n",
+            matches.ambiguous
+        )
+        .. string.format(
+            "Not matched ......... %d",
+            matches.unmatched
+        )
+        .. sync_text
+    )
+end
+
+function ReadingBrain:showAbout()
+    self:showCardDialog(
+        "READING BRAIN",
+        "Version "
+        .. PLUGIN_VERSION
+        .. "\n\n"
+        .. "Unified reading history, discovery, statistics, and reading-pattern analysis.\n\n"
+        .. "Reading Brain writes only to:\n"
+        .. "/mnt/us/readingbrain/readingbrain.sqlite3\n\n"
+        .. "KOReader statistics and Bookmory backups are read only."
+    )
+end
+
 function ReadingBrain:addToMainMenu(menu_items)
     menu_items.reading_brain = {
         text = _("Reading Brain"),
@@ -1043,30 +1246,9 @@ function ReadingBrain:addToMainMenu(menu_items)
             },
 
             {
-                text = _("Stats & Patterns"),
-                sub_item_table = {
-                    { text = _("This Year"), callback = function() self:showThisYear() end },
-                    { text = _("Monthly Reading"), callback = function() self:showMonthlyReading() end },
-                    { text = _("Reading Formats"), callback = function() self:showReadingFormats() end },
-                    { text = _("Ratings"), callback = function() self:showRatings() end },
-                    { text = _("Authors & Genres"), callback = function() self:showAuthorsGenres() end },
-                    { text = _("Reading Habits"), callback = function() self:showReadingHabits() end },
-                    { text = _("Interesting Patterns"), callback = function() self:showInterestingPatterns() end },
-                    { text = _("Reading Records"), callback = function() self:showReadingRecords() end },
-                },
-            },
-
-            {
-                text = _("Sync Unified History"),
+                text = _("Reading Overview"),
                 callback = function()
-                    self:confirmRebuild()
-                end,
-            },
-
-            {
-                text = _("Unified Summary"),
-                callback = function()
-                    self:showSummary()
+                    self:showReadingOverview()
                 end,
             },
 
@@ -1078,118 +1260,102 @@ function ReadingBrain:addToMainMenu(menu_items)
             },
 
             {
-                text = _("Analyze Bookmory Backup"),
-                callback = function()
-                    -- Keep the old analyzer available by reusing the sync
-                    -- summary without writing to KOReader statistics.
-                    local backup = Bookmory:findLatestBackup()
-
-                    if not backup then
-                        UIManager:show(InfoMessage:new{
-                            text =
-                                "No .bookmory backup was found in /mnt/us/readingbrain/.",
-                        })
-                        return
-                    end
-
-                    local db_path, err =
-                        Bookmory:extractDatabase(backup)
-
-                    if not db_path then
-                        UIManager:show(InfoMessage:new{
-                            text = tostring(err),
-                        })
-                        return
-                    end
-
-                    local books, read_err =
-                        Bookmory:readBooks(db_path)
-
-                    if not books then
-                        Bookmory:cleanup(db_path)
-                        UIManager:show(InfoMessage:new{
-                            text = tostring(read_err),
-                        })
-                        return
-                    end
-
-                    local bm = Bookmory:summarize(books)
-                    local kindle = Library:getBooks()
-                    local matches = Library:matchBookmory(books, kindle)
-
-                    Bookmory:cleanup(db_path)
-
-                    UIManager:show(InfoMessage:new{
-                        text =
-                            "BOOKMORY ANALYSIS\n\n"
-                            .. string.format("Books ............... %d\n", bm.books)
-                            .. string.format("Timed sessions ...... %d\n", bm.sessions)
-                            .. string.format("Logged time ......... %s\n", hours_minutes(bm.seconds))
-                            .. string.format("Audio-only sessions . %d\n", bm.audiobook_sessions)
-                            .. string.format("External/hybrid ..... %d\n\n", bm.external_sessions)
-                            .. string.format("Kindle EPUBs ........ %d\n", #kindle)
-                            .. string.format("Matched ............. %d\n", matches.matched)
-                            .. string.format("Needs review ........ %d\n", matches.ambiguous)
-                            .. string.format("Not matched ......... %d", matches.unmatched),
-                    })
-                end,
+                text = _("Stats & Patterns"),
+                sub_item_table = {
+                    {
+                        text = _("By Month"),
+                        callback = function()
+                            self:showMonthlyReading()
+                        end,
+                    },
+                    {
+                        text = _("Ratings & Taste"),
+                        callback = function()
+                            self:showRatingsAndTaste()
+                        end,
+                    },
+                    {
+                        text = _("Reading Habits"),
+                        callback = function()
+                            self:showReadingHabits()
+                        end,
+                    },
+                    {
+                        text = _("Patterns & Records"),
+                        callback = function()
+                            self:showPatternsAndRecords()
+                        end,
+                    },
+                },
             },
 
             {
-                text = _("Notify on wake when update available"),
-                checked_func = function()
-                    return
-                        self.update_notifier
-                        and self.update_notifier:isEnabled()
-                end,
-                callback = function()
-                    if self.update_notifier then
-                        self.update_notifier:setEnabled(
-                            not self.update_notifier:isEnabled()
-                        )
-                    end
-                end,
+                text = _("Data & Sync"),
+                sub_item_table = {
+                    {
+                        text = _("Sync Reading History"),
+                        callback = function()
+                            self:confirmRebuild()
+                        end,
+                    },
+                    {
+                        text = _("Data Status"),
+                        callback = function()
+                            self:showDataStatus()
+                        end,
+                    },
+                },
             },
 
             {
-                text = _("Check for Updates"),
-                callback = function()
-                    local Updater = loadUpdater()
+                text = _("Settings & Updates"),
+                sub_item_table = {
+                    {
+                        text = _("Notify on wake when update available"),
+                        checked_func = function()
+                            return
+                                self.update_notifier
+                                and self.update_notifier:isEnabled()
+                        end,
+                        callback = function()
+                            if self.update_notifier then
+                                self.update_notifier:setEnabled(
+                                    not self.update_notifier:isEnabled()
+                                )
+                            end
+                        end,
+                    },
+                    {
+                        text = _("Check for Updates"),
+                        callback = function()
+                            local Updater =
+                                loadUpdater()
 
-                    if Updater then
-                        Updater:checkForUpdates(
-                            PLUGIN_VERSION
-                        )
-                    end
-                end,
-            },
+                            if Updater then
+                                Updater:checkForUpdates(
+                                    PLUGIN_VERSION
+                                )
+                            end
+                        end,
+                    },
+                    {
+                        text = _("Restore Previous Version"),
+                        callback = function()
+                            local Updater =
+                                loadUpdater()
 
-            {
-                text = _("Restore Previous Version"),
-                callback = function()
-                    local Updater = loadUpdater()
-
-                    if Updater then
-                        Updater:confirmRestore()
-                    end
-                end,
-            },
-
-            {
-                text = _("About"),
-                callback = function()
-                    UIManager:show(InfoMessage:new{
-                        text =
-                            "Reading Brain v"
-                            .. PLUGIN_VERSION
-                            .. "\n\n"
-                            .. "Unified reading history, book discovery, visual statistics, and reading-pattern analysis.\n\n"
-                            .. "Reading Brain writes only to:\n"
-                            .. "/mnt/us/readingbrain/readingbrain.sqlite3\n\n"
-                            .. "It never writes to KOReader's statistics.sqlite3 or your Bookmory backup.\n\n"
-                            .. "KOReader page statistics are grouped into sessions using a 10-minute inactivity gap.",
-                    })
-                end,
+                            if Updater then
+                                Updater:confirmRestore()
+                            end
+                        end,
+                    },
+                    {
+                        text = _("About"),
+                        callback = function()
+                            self:showAbout()
+                        end,
+                    },
+                },
             },
         },
     }

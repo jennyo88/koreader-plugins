@@ -1,97 +1,40 @@
-# Reading Brain v0.5.3
+# Reading Brain v0.6.0
 
-Stats UI cleanup.
+A cleanup release focused on making Reading Brain feel like one coherent KOReader plugin.
 
-The Stats & Patterns screens now use a custom card-style dialog modeled after the TBR Recommender instead of KOReader's large InfoMessage text.
+## Simplified main menu
 
-Changes:
-- smaller 15pt stat text
-- centered 21pt title
-- framed white card
-- thin divider
-- cleaner margins and spacing
-- dedicated Close button
-- e-ink-friendly black-and-white presentation
+```text
+Reading Brain
+├── Discover Books
+├── Taste Profile
+├── Reading Overview
+├── Recent Sessions
+├── Stats & Patterns
+│   ├── By Month
+│   ├── Ratings & Taste
+│   ├── Reading Habits
+│   └── Patterns & Records
+├── Data & Sync
+│   ├── Sync Reading History
+│   └── Data Status
+└── Settings & Updates
+    ├── Notify on wake when update available
+    ├── Check for Updates
+    ├── Restore Previous Version
+    └── About
+```
 
-No stats calculations changed in this release.
+## What was simplified
 
+- `Unified Summary`, `This Year`, and `Reading Formats` are consolidated into **Reading Overview**.
+- `Ratings` and `Authors & Genres` are consolidated into **Ratings & Taste**.
+- `Interesting Patterns` and `Reading Records` are consolidated into **Patterns & Records**.
+- legacy `Analyze Bookmory Backup` becomes **Data Status** and lives beside sync.
+- updater controls and About are grouped under **Settings & Updates**.
+- all informational result screens use the same Reading Brain card UI.
+- long cards remain scrollable.
+- zero-length reading sessions remain filtered out.
+- Bookshelf-style wake update notifications are preserved.
 
-## v0.5.4
-
-Reading Brain keeps the v0.5.3 visual formatting unchanged.
-
-Update notifications now match the Bookshelf behavior more closely:
-
-- menu item: **Notify on wake when update available**
-- setting is clickable and persists correctly
-- opt-in; off by default
-- checks only after Kindle/KOReader wake
-- only checks while Wi-Fi is already connected
-- at most one successful check per hour
-- posts a quiet top-edge notification only when a newer version exists
-- never turns Wi-Fi on
-- never installs an update automatically
-
-
-## v0.5.5 unified Reading Brain UI
-
-Reading Brain now uses the same card-style visual language throughout the plugin.
-
-Updated screens include:
-
-- Taste Profile
-- Unified Summary
-- Recent Sessions
-- Bookmory Analysis
-- discovery book details
-- About
-- Stats & Patterns
-
-Discover Books keeps its tappable recommendation list, but the selected-book details now open in the same framed card style.
-
-The goal is one consistent Reading Brain interface:
-- same title treatment
-- same smaller body text
-- same framed card
-- same spacing
-- same Close button
-- same e-ink-friendly black-and-white presentation
-
-
-## v0.5.6 hotfix
-
-Fixes the v0.5.5 Lua syntax error that prevented Reading Brain from loading.
-
-The card-style interface is now applied safely to:
-- Sync Unified History completion
-- Unified Summary
-- Recent Sessions
-- Taste Profile
-- selected Discover Books details
-- Stats & Patterns
-
-Discover Books keeps its tappable recommendation list. Progress messages and error notices remain lightweight KOReader messages.
-
-
-## v0.5.7
-
-Two fixes:
-
-### Scrollable long cards
-
-Long Reading Brain card screens, especially **Recent Sessions**, now use a fixed-height scrollable body. The title and **Close** button remain on-screen, so a long session list can no longer push the button below the Kindle display.
-
-Short screens still use the normal compact card.
-
-### Ignore zero-length sessions
-
-Reading Brain now ignores sessions whose duration is `0` seconds.
-
-This is useful when a book is briefly opened only so another plugin can detect its page count. Those bookkeeping opens are no longer treated as actual reading sessions.
-
-Filtering is applied in three places:
-- new Bookmory imports
-- new KOReader imports
-- summary/recent-session queries for an existing Reading Brain database
-
-Running **Sync Unified History** once after installing v0.5.7 will rebuild the cache without zero-length sessions.
+The discovery list stays tappable and native, while selected-book details use the Reading Brain card UI.
