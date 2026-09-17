@@ -31,3 +31,28 @@ Update notifications now match the Bookshelf behavior more closely:
 - posts a quiet top-edge notification only when a newer version exists
 - never turns Wi-Fi on
 - never installs an update automatically
+
+
+## v0.5.5 unified Reading Brain UI
+
+Reading Brain now uses the same card-style visual language throughout the plugin.
+
+Updated screens include:
+
+- Taste Profile
+- Unified Summary
+- Recent Sessions
+- Bookmory Analysis
+- discovery book details
+- About
+- Stats & Patterns
+
+Discover Books keeps its tappable recommendation list, but the selected-book details now open in the same framed card style.
+
+The goal is one consistent Reading Brain interface:
+- same title treatment
+- same smaller body text
+- same framed card
+- same spacing
+- same Close button
+- same e-ink-friendly black-and-white presentation

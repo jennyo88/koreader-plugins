@@ -21,7 +21,7 @@ local _ = require("gettext")
 
 local Screen = Device.screen
 
-local PLUGIN_VERSION = "0.5.4"
+local PLUGIN_VERSION = "0.5.5"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -585,11 +585,9 @@ function ReadingBrain:showRecentSessions()
         Brain:getRecentSessions(18)
 
     if #sessions == 0 then
-        UIManager:show(InfoMessage:new{
-            text =
-                "No unified sessions yet.\n\n"
+        self:showCardDialog("RECENT SESSIONS", "No unified sessions yet.\n\n"
                 .. "Run Sync Unified History first.",
-        })
+        )
         return
     end
 
@@ -689,13 +687,9 @@ function ReadingBrain:showTasteProfile()
         self:loadBookmoryBooks()
 
     if not books then
-        UIManager:show(
-            InfoMessage:new{
-                text =
-                    "Could not build taste profile.\n\n"
+        self:showCardDialog("TASTE PROFILE", "Could not build taste profile.\n\n"
                     .. tostring(err),
-            }
-        )
+            )
 
         return
     end
@@ -940,17 +934,8 @@ function ReadingBrain:withStatsContext(callback)
     end
 end
 
-function ReadingBrain:closeStatsDialog()
-    if self.stats_dialog then
-        UIManager:close(
-            self.stats_dialog
-        )
 
-        self.stats_dialog = nil
-    end
-end
-
-function ReadingBrain:showStatsText(title, text)
+function ReadingBrain:showCardDialog(title, text)
     self:closeStatsDialog()
 
     self.stats_dialog =
@@ -962,6 +947,23 @@ function ReadingBrain:showStatsText(title, text)
 
     UIManager:show(
         self.stats_dialog
+    )
+end
+
+function ReadingBrain:closeStatsDialog()
+    if self.stats_dialog then
+        UIManager:close(
+            self.stats_dialog
+        )
+
+        self.stats_dialog = nil
+    end
+end
+
+function ReadingBrain:showStatsText(title, text)
+    self:showCardDialog(
+        title,
+        text
     )
 end
 
