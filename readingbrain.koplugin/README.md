@@ -1,3 +1,10 @@
+<<<<<<< HEAD
+# Reading Brain v0.5.0
+
+Reading Brain now includes **Stats & Patterns** with e-ink-friendly visual bars and evidence-based reading observations.
+
+## Stats & Patterns
+=======
 # Reading Brain v0.4.0
 
 Reading Brain combines your Bookmory history and KOReader statistics, and can now use your ratings to discover books you do not already own.
@@ -43,15 +50,52 @@ The normal **Check for Updates** command still performs the actual installation.
 ## Unified reading history
 
 Reading Brain still keeps its separate cache at:
+>>>>>>> bc9c6802435641f0095d2b252f628b341e0b0eef
 
 ```text
-/mnt/us/readingbrain/readingbrain.sqlite3
+Tools → Reading Brain → Stats & Patterns
+├── This Year
+├── Monthly Reading
+├── Reading Formats
+├── Ratings
+├── Authors & Genres
+├── Reading Habits
+├── Interesting Patterns
+└── Reading Records
 ```
 
+<<<<<<< HEAD
+### Visual stats
+
+- current-year reading time
+- month-by-month reading bars
+- Kindle vs Audiobook vs External/Hybrid
+- rating distribution
+- reading by weekday and time of day
+- repeat authors and recurring tags
+
+### Interesting patterns
+
+Reading Brain only reports a pattern when there is enough supporting data. Current tests include:
+
+- biggest reading weekday
+- reliable recurring tag
+- most unpredictable recurring tag
+- fastest high-rated “obsession”
+- biggest comeback after a long break
+=======
 It does not modify KOReader's statistics database or the Bookmory backup.
+>>>>>>> bc9c6802435641f0095d2b252f628b341e0b0eef
 
-## Menu
+### Reading records
 
+<<<<<<< HEAD
+- longest unified reading session
+- most intense reading day
+- book with the most total logged reading time
+
+The existing discovery engine, unified history, Bookmory analysis, updater, and update notification remain intact.
+=======
 ```text
 Tools
 └── Reading Brain
@@ -66,3 +110,4 @@ Tools
     ├── Restore Previous Version
     └── About
 ```
+>>>>>>> bc9c6802435641f0095d2b252f628b341e0b0eef
