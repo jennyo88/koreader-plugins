@@ -24,7 +24,7 @@
     },
     "readingbrain": {
       "name": "Reading Brain",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "description": "Unified reading history and personalized book discovery.",
       "files": [
         "_meta.lua",
