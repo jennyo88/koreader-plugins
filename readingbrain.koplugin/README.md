@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Reading Brain v0.5.0
 
 Reading Brain now includes **Stats & Patterns** with e-ink-friendly visual bars and evidence-based reading observations.
