@@ -104,21 +104,82 @@ local function unified_sessions()
     return out
 end
 
-function StatsPatterns:thisYear(bookmory_books)
-    local sessions=unified_sessions()
-    if #sessions==0 then return "No unified history yet.\n\nRun Sync Unified History first." end
-    local year=tonumber(os.date("%Y")); local total,kindle,audio,hybrid=0,0,0,0; local days,books={},{}
-    for _,s in ipairs(sessions) do
-        if tonumber(os.date("%Y",s.start_time))==year then
-            total=total+s.duration
-            if s.medium=="Kindle" then kindle=kindle+s.duration elseif s.medium=="Audiobook" then audio=audio+s.duration elseif s.medium=="External/Hybrid" then hybrid=hybrid+s.duration end
-            days[os.date("%Y-%m-%d",s.start_time)]=true
-            books[normalize(s.title)]=true
+
+function StatsPatterns:overview(bookmory_books)
+    local sessions =
+        read_unified_sessions()
+
+    if #sessions == 0 then
+        return
+            "No unified history yet.\n\n"
+            .. "Run Sync Unified History first."
+    end
+
+    local year = current_year()
+    local total = 0
+    local kindle = 0
+    local audio = 0
+    local hybrid = 0
+    local days = {}
+    local books = {}
+    local session_count = 0
+
+    for _, s in ipairs(sessions) do
+        if same_year(s, year) then
+            total = total + s.duration
+            session_count = session_count + 1
+
+            if s.medium == "Kindle" then
+                kindle = kindle + s.duration
+            elseif s.medium == "Audiobook" then
+                audio = audio + s.duration
+            elseif s.medium == "External/Hybrid" then
+                hybrid = hybrid + s.duration
+            end
+
+            days[os.date("%Y-%m-%d", s.start_time)] = true
+            books[normalize(s.title)] = true
         end
     end
-    local d,b=0,0; for _ in pairs(days) do d=d+1 end; for k in pairs(books) do if k~="" then b=b+1 end end
-    local maxv=math.max(kindle,audio,hybrid,1)
-    return tostring(year).."\n\nTOTAL READING\n"..bar(total,total,20).."  "..human(total).."\n\nKindle\n"..bar(kindle,maxv,18).."  "..human(kindle).."\n\nAudiobook\n"..bar(audio,maxv,18).."  "..human(audio).."\n\nExternal / Hybrid\n"..bar(hybrid,maxv,18).."  "..human(hybrid).."\n\nActive reading days: "..d.."\nBooks with sessions: "..b
+
+    local active_days = 0
+    for _ in pairs(days) do
+        active_days = active_days + 1
+    end
+
+    local book_count = 0
+    for key in pairs(books) do
+        if key ~= "" then
+            book_count = book_count + 1
+        end
+    end
+
+    local average_session =
+        session_count > 0
+        and total / session_count
+        or 0
+
+    local max_format =
+        math.max(kindle, audio, hybrid, 1)
+
+    local lines = {}
+
+    section(lines, tostring(year))
+    table.insert(lines, "Total reading    " .. human_time(total))
+    table.insert(lines, "Reading days     " .. tostring(active_days))
+    table.insert(lines, "Books active     " .. tostring(book_count))
+    table.insert(lines, "Avg. session     " .. human_time(average_session))
+
+    section(lines, "FORMAT MIX")
+    table.insert(lines, "Kindle           " .. bar(kindle, max_format, 10) .. "  " .. human_time(kindle))
+    table.insert(lines, "Audiobook        " .. bar(audio, max_format, 10) .. "  " .. human_time(audio))
+    table.insert(lines, "External/Hybrid  " .. bar(hybrid, max_format, 10) .. "  " .. human_time(hybrid))
+
+    return table.concat(lines, "\n")
+end
+
+function StatsPatterns:thisYear(bookmory_books)
+    return self:overview(bookmory_books)
 end
 
 function StatsPatterns:monthlyReading(bookmory_books)
@@ -134,15 +195,62 @@ function StatsPatterns:monthlyReading(bookmory_books)
 end
 
 function StatsPatterns:readingFormats(bookmory_books)
-    local sessions=unified_sessions(); if #sessions==0 then return "No unified history yet.\n\nRun Sync Unified History first." end
-    local totals,total={},0
-    for _,s in ipairs(sessions) do totals[s.medium]=(totals[s.medium] or 0)+s.duration; total=total+s.duration end
-    local lines={}
-    for _,medium in ipairs({"Kindle","Audiobook","External/Hybrid"}) do
-        local sec=totals[medium] or 0; local pct=total>0 and sec/total*100 or 0
-        table.insert(lines,medium.."\n"..bar(sec,total,20)..string.format("  %.1f%% • %s",pct,human(sec)).."\n")
+    local sessions = read_unified_sessions()
+
+    if #sessions == 0 then
+        return
+            "No unified history yet.
+
+"
+            .. "Run Sync Unified History first."
     end
-    return table.concat(lines,"\n")
+
+    local totals = {}
+    local total = 0
+
+    for _, s in ipairs(sessions) do
+        totals[s.medium] =
+            (totals[s.medium] or 0)
+            + s.duration
+
+        total = total + s.duration
+    end
+
+    local order = {
+        "Kindle",
+        "Audiobook",
+        "External/Hybrid",
+    }
+
+    local lines = {}
+
+    for _, medium in ipairs(order) do
+        local seconds = totals[medium] or 0
+        local pct =
+            total > 0
+            and (seconds / total * 100)
+            or 0
+
+        table.insert(
+            lines,
+            string.format(
+                "%-16s %5.1f%%  %s",
+                medium,
+                pct,
+                human_time(seconds)
+            )
+        )
+
+        table.insert(
+            lines,
+            bar(seconds, total, 16)
+        )
+
+        table.insert(lines, "")
+    end
+
+    return table.concat(lines, "
+")
 end
 
 function StatsPatterns:ratings(bookmory_books)
