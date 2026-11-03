@@ -14,15 +14,20 @@ local active_instance, active_screen
 local boot_seen = false
 local return_from_book = false
 local patch_installed = false
+local navigation_token = 0
 
 local VisualLibrary = WidgetContainer:extend{ name = "visual_library", is_doc_only = false }
 
-local function close_screen()
+local function close_screen(refresh_type)
     if active_screen then
         local screen = active_screen
         active_screen = nil
-        UIManager:close(screen)
+        UIManager:close(screen, refresh_type)
     end
+end
+
+local function cancel_navigation()
+    navigation_token = navigation_token + 1
 end
 
 local function save(key, value)
@@ -55,7 +60,10 @@ local function start_menu_hook()
                 entry._visual_wrapped = true
                 entry.callback = function(...)
                     callback(...)
-                    if G_reader_settings:readSetting("start_with") ~= "visual_library" then close_screen() end
+                    if G_reader_settings:readSetting("start_with") ~= "visual_library" then
+                        cancel_navigation()
+                        close_screen("ui")
+                    end
                 end
             end
         end
@@ -140,13 +148,26 @@ end
 
 function VisualLibrary:showVisual(page)
     if not (self.ui and not self.ui.document) then return end
-    self:loadCatalog()
-    close_screen()
-    local screen_ui = require("visualui")
-    local widget = screen_ui:new{ plugin = self, page = page or "home", settings = settings,
-        catalog = self._catalog, bookinfo = self._bookinfo }
-    active_screen = widget
-    UIManager:show(widget)
+    -- Defer a navigation triggered by a button tap until the current input
+    -- event has finished dispatching. Repeated taps only apply the latest page.
+    cancel_navigation()
+    local requested_token = navigation_token
+    local requested_page = page or "home"
+    UIManager:nextTick(function()
+        if requested_token ~= navigation_token or active_instance ~= self then return end
+        self:loadCatalog()
+        local previous_page = active_screen and active_screen.page
+        close_screen()
+        local screen_ui = require("visualui")
+        local widget = screen_ui:new{ plugin = self, page = requested_page, settings = settings,
+            catalog = self._catalog, bookinfo = self._bookinfo }
+        active_screen = widget
+        -- On page changes repaint *and* refresh the entire screen. KOReader's
+        -- UIManager:show() does NOT schedule a display refresh without its
+        -- second argument; that caused the home/mood screens to bleed together.
+        -- Same-page toggle actions still repaint but use the lighter UI waveform.
+        UIManager:show(widget, previous_page == requested_page and "ui" or "full")
+    end)
 end
 
 function VisualLibrary:openBook(path)
@@ -154,7 +175,8 @@ function VisualLibrary:openBook(path)
         UIManager:show(require("ui/widget/infomessage"):new{ text = _("Book file not found. Refresh the library.") })
         return
     end
-    close_screen()
+    cancel_navigation()
+    close_screen("ui")
     return_from_book = true
     local ReaderUI = require("apps/reader/readerui")
     ReaderUI:showReader(path)
@@ -163,5 +185,5 @@ end
 -- Exposed for the UI and tests.
 function VisualLibrary:getStore() return settings end
 function VisualLibrary:getMoods() return Moods end
-function VisualLibrary:closeVisual() close_screen() end
+function VisualLibrary:closeVisual() cancel_navigation(); close_screen("ui") end
 return VisualLibrary

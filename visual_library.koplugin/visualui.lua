@@ -125,7 +125,12 @@ function CoverTile:onHoldCover()
     return true
 end
 
-local VisualUI = InputContainer:extend{}
+-- Mark the library as a full-screen, opaque KOReader window so that the
+-- compositor never skips/merges its repaint with the File Manager beneath it.
+local VisualUI = InputContainer:extend{
+    covers_fullscreen = true,
+    modal = true,
+}
 function VisualUI:init()
     self.state = self.plugin._visual_state or {shelf="all",page_num=1,results_page=1,queue_page=1,
         selected=self.settings:readSetting("selected_moods") or {},mood_scope="all"}
@@ -139,7 +144,10 @@ function VisualUI:init()
         self.key_events.VisualBack = {{ require("device").input.group.Back }}
     end
 end
-function VisualUI:onVisualBack() self:go("home");return true end
+function VisualUI:onVisualBack()
+    if self.page == "home" then self.plugin:closeVisual() else self:go("home") end
+    return true
+end
 function VisualUI:go(page)
     self.plugin:showVisual(page)
 end
@@ -526,5 +534,4 @@ function VisualUI:build()
         },
     }
 end
-function VisualUI:onCloseWidget() return true end
 return VisualUI

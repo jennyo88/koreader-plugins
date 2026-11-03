@@ -1,6 +1,14 @@
-# Visual Library for KOReader · early prototype v0.1.0
+# Visual Library for KOReader · early prototype v0.1.1
 
 **Made for monochrome Kindle Paperwhite (7th generation) and EPUB libraries.**
+
+## Fix in v0.1.1: screen navigation & refresh
+- Fixes the Home screen remaining visible when tapping **Find by mood**.
+- Marks Visual Library as a full-screen opaque window.
+- Performs a full repaint/refresh when changing screens, and a lighter UI refresh when reloading the same screen.
+- Schedules navigation after input handling to prevent partially displayed pages.
+- Closing the plugin refreshes the underlying KOReader file manager.
+- Update without deleting `koreader/settings/visual_library.lua`; existing mood tags, queue and shelf selections are retained.
 
 ## Features in this build
 - Home: prominent Mood Picker, last EPUB, queue preview, and shelves.
@@ -33,3 +41,11 @@ This does **not** import your custom Bookshelf plugin categories or Bookmory dat
 This ZIP has been statically checked but **not tested on a real Kindle**. KOReader plugin APIs may differ from the source checked in November 2026 or from the user's installation. Please test launching from the Tools menu before selecting it under Start with.
 
 The code uses KOReader libraries loaded by KOReader; running it with a stock Lua interpreter alone does not display its UI. No changes are made to Bookshelf's files or Calibre data.
+
+## Updating from v0.1.0
+1. Exit Visual Library and KOReader fully.
+2. Replace the complete `koreader/plugins/visual_library.koplugin` folder with the v0.1.1 folder.
+3. Restart KOReader, enter Visual Library from the file manager, and tap **Find by mood**.
+4. If the old home controls still appear, send a new photo and check `koreader/crash.log`.
+
+Avoid deleting `koreader/settings/visual_library.lua`: it stores your personal choices.
