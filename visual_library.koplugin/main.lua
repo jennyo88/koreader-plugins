@@ -1,4 +1,4 @@
--- Visual Library for KOReader, initial public prototype.
+-- Visual Library for KOReader, v0.2.0 visual redesign.
 -- This plugin does not replace or modify Bookshelf's data.
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local UIManager = require("ui/uimanager")
