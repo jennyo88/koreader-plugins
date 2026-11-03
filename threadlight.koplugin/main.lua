@@ -1,4 +1,4 @@
--- Threadlight 1.3: an offline, spoiler-aware memory trail for EPUBs.
+-- Threadlight 1.3.1: an offline, spoiler-aware memory trail for EPUBs.
 -- All story content is entered by the reader; the plugin never scans book text.
 
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -570,8 +570,14 @@ function Threadlight:showPhoneAddress()
     local address = self.phone_server:url()
     local ok, QRMessage = pcall(require, "ui/widget/qrmessage")
     if ok and QRMessage then
+        -- KOReader v2026.07.x requires explicit dimensions for QRMessage.
+        -- Otherwise QRWidget receives nil dimensions and produces a tiny/blank code.
+        local Screen = require("device").screen
+        local side = math.floor(math.min(Screen:getWidth() * 0.88, Screen:getHeight() * 0.76))
         UIManager:show(QRMessage:new {
             text = address,
+            width = side,
+            height = side,
             title = _("Scan with your phone"),
         })
     else

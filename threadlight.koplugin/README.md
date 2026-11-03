@@ -1,4 +1,4 @@
-# Threadlight for KOReader — v1.3
+# Threadlight for KOReader — v1.3.1
 
 A small, spoiler-aware personal story memory plugin for EPUBs. Intended for low-resource e-ink readers, including older Kindle Paperwhites. The **phone editor** lets you save notes with your phone keyboard while the notes remain stored locally on the Kindle.
 
@@ -14,7 +14,7 @@ A small, spoiler-aware personal story memory plugin for EPUBs. Intended for low-
 1. Connect the Kindle and your phone to the **same Wi-Fi network**. Do not use a guest network that isolates devices.
 2. Open the desired EPUB in KOReader and navigate to the passage you are documenting.
 3. Open **Tools → Threadlight → Phone editor · start / show address**.
-4. Use your phone camera to **scan the QR code** that appears on your Kindle. If QR display isn't supported on your KOReader installation, manually enter the displayed URL in your phone browser.
+4. Use your phone camera to **scan the large, centered QR code** that appears on your Kindle. Tap the screen to close the QR overlay after scanning. If QR display isn't supported on your KOReader installation, manually enter the displayed URL in your phone browser.
 5. On the page, write a checkpoint (two fields) or start a story thread (name and optional explanation), then tap Save. You'll receive a confirmation message in the browser.
 6. Select **Tools → Threadlight → Phone editor · stop** on your Kindle when finished. You can start it again anytime.
 
@@ -31,6 +31,10 @@ Existing KOReader **text highlights** are read directly from the open EPUB's liv
 - Only textual highlights that KOReader exposes in `ui.annotation.annotations` are included. Bookmarks, image-only annotations, and highlights made in other apps but not imported into KOReader are not included.
 - If an EPUB or checkpoint lacks a valid XPointer, Threadlight reports that rather than guessing from reading percentages. Changing EPUB versions or reformatting can invalidate anchors. No story text is analyzed or sent online.
 - The original KOReader highlights remain untouched. Removing Threadlight does not remove the highlights.
+
+### v1.3.1 QR display fix
+
+KOReader v2026.07.x requires an explicit QR widget width and height. Older Threadlight builds omitted these settings, leaving the phone editor QR extremely small or blank. This update sets the QR to approximately 88% of the Kindle screen width (subject to screen height) for reliable scanning. The phone editor and all highlight features are otherwise unchanged.
 
 ### Troubleshooting
 
