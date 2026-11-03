@@ -27,7 +27,7 @@ Once the ZIP is on the Kindle, from its KOReader directory (the directory contai
 unzip -o /path/to/threadlight-koreader-v1.0.zip -d .
 ```
 
-If you host the ZIP at your own URL, download with `curl -L -o /tmp/threadlight.zip 'https://YOUR-URL/threadlight-koreader-v1.0.zip'` and extract with `unzip -o /tmp/threadlight.zip -d /path/to/koreader/`. The ChatGPT attachment's link is not a direct public curl URL.
+If you host the ZIP at your own URL, download with `curl -L -o /tmp/threadlight.zip 'https://YOUR-URL/threadlight-koreader-v1.0.zip'` and extract with `unzip -o /tmp/threadlight.zip -d /path/to/koreader/`.
 
 ## Notes, design limits & privacy
 
