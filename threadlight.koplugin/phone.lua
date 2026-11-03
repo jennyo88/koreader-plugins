@@ -82,7 +82,9 @@ function M.start(callback)
     if not token then return nil, 'Secure random bytes are unavailable.' end
     local ip = M.localIP(socket)
     if not ip then return nil, 'Could not find a Wi-Fi IP address. Connect to Wi-Fi first.' end
-    local listener, err = socket.bind(ip, 0)
+    -- Listen on all interfaces; advertise only the Wi-Fi IP in the QR code.
+    -- This avoids interface binding discrepancies on older Kindle kernels.
+    local listener, err = socket.bind('0.0.0.0', 0)
     if not listener then return nil, err or 'Unable to listen on Wi-Fi.' end
     listener:settimeout(0)
     local _, port = listener:getsockname()
@@ -123,6 +125,7 @@ function Server:process()
     local key = target:match('^/%?key=([a-f0-9]+)$')
     if key ~= self.token then self:reply(403, 'Invalid or expired editor link.'); return end
     if method == 'GET' then
+        self.request_count = (self.request_count or 0) + 1
         local ok, archive = self.callback({ type = 'overview' })
         self:reply(200, M.page(self.token, nil, ok and archive or nil)); return
     end
@@ -139,6 +142,7 @@ function Server:process()
     end
     local body = self.buffer:sub(headEnd + 4)
     if #body < length then return end
+    self.request_count = (self.request_count or 0) + 1
     local form = M.parseForm(body:sub(1, length))
     local success, message = self.callback(form)
     local archive_ok, archive = self.callback({ type = 'overview' })
@@ -147,10 +151,12 @@ end
 
 function Server:poll()
     if not self.listener then return end
+    self.poll_count = (self.poll_count or 0) + 1
     if not self.client then
         local c = self.listener:accept()
         if not c then return end
         c:settimeout(0)
+        self.accept_count = (self.accept_count or 0) + 1
         self.client, self.buffer, self.sending, self.connected_at = c, '', nil, os.time()
     end
     if os.time() - self.connected_at > 20 then self:closeClient(); return end

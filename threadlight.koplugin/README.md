@@ -1,4 +1,4 @@
-# Threadlight for KOReader — v1.3.1
+# Threadlight for KOReader — v1.3.2
 
 A small, spoiler-aware personal story memory plugin for EPUBs. Intended for low-resource e-ink readers, including older Kindle Paperwhites. The **phone editor** lets you save notes with your phone keyboard while the notes remain stored locally on the Kindle.
 
@@ -32,7 +32,7 @@ Existing KOReader **text highlights** are read directly from the open EPUB's liv
 - If an EPUB or checkpoint lacks a valid XPointer, Threadlight reports that rather than guessing from reading percentages. Changing EPUB versions or reformatting can invalidate anchors. No story text is analyzed or sent online.
 - The original KOReader highlights remain untouched. Removing Threadlight does not remove the highlights.
 
-### v1.3.1 QR display fix
+### v1.3.2 QR display fix
 
 KOReader v2026.07.x requires an explicit QR widget width and height. Older Threadlight builds omitted these settings, leaving the phone editor QR extremely small or blank. This update sets the QR to approximately 88% of the Kindle screen width (subject to screen height) for reliable scanning. The phone editor and all highlight features are otherwise unchanged.
 
@@ -75,3 +75,7 @@ luatex --luaonly tests/highlights_smoke.lua
 ```
 
 These exercise menu registration, position filtering, note persistence, HTML encoding, the local HTTP server and POST decoding on a desktop mock. **This version has not yet been tested on a physical Kindle.**
+
+## v1.3.2 connection fix
+
+Phone editor now prevents KOReader standby while active, listens on all local interfaces while advertising only the Wi-Fi IP, and offers **Phone editor · connection status** to diagnose whether the event loop and network accept requests. Stop the phone editor when finished to restore normal power management. This fix has not been verified on a physical Kindle.

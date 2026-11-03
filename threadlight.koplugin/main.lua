@@ -1,4 +1,4 @@
--- Threadlight 1.3.1: an offline, spoiler-aware memory trail for EPUBs.
+-- Threadlight 1.3.2: an offline, spoiler-aware memory trail for EPUBs.
 -- All story content is entered by the reader; the plugin never scans book text.
 
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -526,6 +526,10 @@ function Threadlight:stopPhoneEditor()
         self.phone_server = nil
     end
     self.phone_anchor = nil
+    if self.phone_preventing_standby then
+        self.phone_preventing_standby = nil
+        UIManager:allowStandby()
+    end
 end
 
 function Threadlight:phoneAnchor()
@@ -599,6 +603,10 @@ function Threadlight:startPhoneEditor()
         return
     end
     self.phone_server = server
+    -- KOReader's UI may enter standby while the QR dialog is displayed.
+    -- Keep scheduled socket processing and Wi-Fi alive until Stop is selected.
+    UIManager:preventStandby()
+    self.phone_preventing_standby = true
     self.phone_anchor = self:newAnchor()
     self.phone_poll = function()
         if not self.phone_server then return end
@@ -608,9 +616,9 @@ function Threadlight:startPhoneEditor()
             self:message(_("Phone editor stopped: ") .. tostring(poll_err))
             return
         end
-        UIManager:scheduleIn(0.25, self.phone_poll)
+        UIManager:scheduleIn(0.10, self.phone_poll)
     end
-    UIManager:scheduleIn(0.25, self.phone_poll)
+    UIManager:scheduleIn(0.10, self.phone_poll)
     self:showPhoneAddress()
 end
 
@@ -659,6 +667,16 @@ function Threadlight:addToMainMenu(menu_items)
             { text = _("Story threads"), callback = function() self:showThreads() end },
             { text = _("Phone editor · start / show address"), separator = true,
                 callback = function() self:startPhoneEditor() end },
+            { text = _("Phone editor · connection status"),
+                enabled_func = function() return self.phone_server ~= nil end,
+                callback = function()
+                    local server = self.phone_server
+                    if not server then return end
+                    self:showText(_("Phone editor diagnostics"),
+                        string.format("Address: %s:%d\nServer polls: %d\nConnections accepted: %d\nRequests handled: %d\n\nIf polls increase but connections remain zero after loading the phone link, the socket is not receiving traffic. If polls stay at zero, KOReader is not running the server timer.",
+                            server.ip, server.port, server.poll_count or 0,
+                            server.accept_count or 0, server.request_count or 0))
+                end },
             { text = _("Phone editor · stop"),
                 enabled_func = function() return self.phone_server ~= nil end,
                 callback = function()
