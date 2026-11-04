@@ -7,7 +7,7 @@ local Menu = require("ui/widget/menu")
 local LuaSettings = require("luasettings")
 local DataStorage = require("datastorage")
 local _ = require("gettext")
-local version = "0.2.0"
+local version = "0.3.0"
 
 local MinimalShelf = WidgetContainer:extend{
     name = "minimalshelf",
@@ -24,6 +24,7 @@ function MinimalShelf:init()
     self.Catalog = dofile(root .. "/catalog.lua")
     self.Catalog.CalibrePages = dofile(root .. "/calibre_pages.lua")
     self.Series = dofile(root .. "/series.lua")
+    self.Gallery = dofile(root .. "/covergallery.lua")
     self.Updater = dofile(root .. "/updater.lua")
     local Notifier = dofile(root .. "/update_notifier.lua")
     self.notifier = Notifier:new{ plugin_id = "minimalshelf", plugin_name = "Minimal Shelf", current_version = version }
@@ -69,6 +70,15 @@ function MinimalShelf:openBook(book)
 end
 
 function MinimalShelf:bookList(title, books)
+    -- Default to the cover gallery; keep the native text menu as a fallback.
+    if #books > 0 and not self.settings:isTrue("text_lists") then
+        local ok, rendered = pcall(function()
+            return self.Gallery.show(title, books, self.Series.badge,
+                function(book) self:openBook(book) end)
+        end)
+        if ok and rendered then return end
+        message(_("Cover view unavailable. Showing titles instead."))
+    end
     local entries = {}
     for _, book in ipairs(books or {}) do
         local item = book
@@ -98,6 +108,20 @@ function MinimalShelf:showSeries()
 end
 
 function MinimalShelf:showNext()
+    local suggestions = self.Series.next(self.books)
+    if not self.settings:isTrue("text_lists") then
+        local books = {}
+        for _, item in ipairs(suggestions) do
+            books[#books + 1] = item.book
+        end
+        if #books > 0 then
+            local ok, rendered = pcall(function()
+                return self.Gallery.show(_("Next in series"), books, self.Series.badge,
+                    function(book) self:openBook(book) end)
+            end)
+            if ok and rendered then return end
+        end
+    end
     local entries = {}
     for _, suggestion in ipairs(self.Series.next(self.books)) do
         local item = suggestion
@@ -165,12 +189,29 @@ function MinimalShelf:chooseFolder()
     })
 end
 
+function MinimalShelf:extractCovers()
+    local manager = self.Gallery.getManager()
+    if not manager then
+        message(_("Enable KOReader's bundled Cover Browser plugin, then restart KOReader to extract cover thumbnails."))
+        return
+    end
+    -- Cover Browser presents its own extraction confirmation and offers
+    -- recursive scanning. This is deliberately never run automatically.
+    local Trapper = require("ui/trapper")
+    Trapper:wrap(function()
+        manager:extractBooksInDirectory(self:libraryRoot())
+    end)
+end
+
 function MinimalShelf:showSettings()
     local limit = tonumber(self.settings:readSetting("short_limit")) or 100
     local remaining = self.settings:isTrue("short_remaining")
     self:showMenu(_("Minimal Shelf settings"), {
         { text = _("Refresh library (offline)"), callback = function() self:refreshLibrary(false) end },
         { text = _("Extract page counts (offline)"), callback = function() self:refreshLibrary(true) end },
+        { text = _("Extract book covers (manual, offline)"), callback = function()
+            self:extractCovers()
+        end },
         { text = _("Choose library folder"), callback = function() self:chooseFolder() end },
         { text = _("Short-read cutoff: ") .. limit .. _(" pages"), callback = function()
             local new_limit = (limit == 75 and 100) or (limit == 100 and 150) or 75
@@ -183,6 +224,13 @@ function MinimalShelf:showSettings()
             self.settings:flush()
             message(_("Updated. Reopen settings to see the new value."))
         end },
+        { text = self.settings:isTrue("text_lists")
+              and _("Book display: Text lists") or _("Book display: Covers"),
+          callback = function()
+            self.settings:saveSetting("text_lists", not self.settings:isTrue("text_lists"))
+            self.settings:flush()
+            message(_("Book display changed. Reopen a book list to see it."))
+        end },
         { text = _("Check for updates (manual Wi-Fi)"), callback = function()
             self.Updater:checkForUpdates(version)
         end },
@@ -192,7 +240,44 @@ function MinimalShelf:showSettings()
     })
 end
 
+-- Prefer books already in progress, then next volumes, then the rest.
+-- No additional scanning occurs when the home screen opens.
+function MinimalShelf:homeBooks()
+    local featured, seen = {}, {}
+    local function append(book)
+        if book and not seen[book.path] and book.status ~= "complete" then
+            featured[#featured + 1] = book
+            seen[book.path] = true
+        end
+    end
+    for _, book in ipairs(self.books) do
+        if book.status == "reading" then append(book) end
+    end
+    for _, suggestion in ipairs(self.Series.next(self.books)) do
+        append(suggestion.book)
+    end
+    for _, book in ipairs(self.Series.short(self.books,
+            tonumber(self.settings:readSetting("short_limit")) or 100, false)) do
+        append(book)
+    end
+    for _, book in ipairs(self.books) do append(book) end
+    return featured
+end
+
 function MinimalShelf:showHome()
+    if #self.books > 0 and not self.settings:isTrue("text_lists") then
+        local ok, rendered = pcall(function()
+            return self.Gallery.show(_("Minimal Shelf"), self:homeBooks(),
+                self.Series.badge,
+                function(book) self:openBook(book) end,
+                function() self:showSectionsMenu() end)
+        end)
+        if ok and rendered then return end
+    end
+    self:showSectionsMenu()
+end
+
+function MinimalShelf:showSectionsMenu()
     local reading = {}
     for _, book in ipairs(self.books) do
         if book.status == "reading" then reading[#reading + 1] = book end

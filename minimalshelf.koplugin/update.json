@@ -1,6 +1,6 @@
 {
   "plugin": "minimalshelf",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "channel": "stable",
-  "notes": "Added manual offline page-count extraction and Calibre #pages fallback."
+  "notes": "Added an offline 2x2 cover gallery, cover-first home, and manual cover extraction."
 }

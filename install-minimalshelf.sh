@@ -11,7 +11,7 @@ TMP="/tmp/$PLUGIN-install-$$"
 STAGE="${TARGET}.new.$$"
 BASE="https://raw.githubusercontent.com/$REPO/$BRANCH/$PLUGIN.koplugin"
 
-FILES="_meta.lua main.lua version.lua catalog.lua series.lua calibre_pages.lua updater.lua update_notifier.lua update.json"
+FILES="_meta.lua main.lua version.lua catalog.lua series.lua covergallery.lua calibre_pages.lua updater.lua update_notifier.lua update.json"
 
 cleanup() {
     rm -rf "$TMP" "$STAGE"
