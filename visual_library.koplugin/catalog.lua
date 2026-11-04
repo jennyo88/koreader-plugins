@@ -60,6 +60,8 @@ function Catalog.enrich(items, bookinfo)
             if type(meta.authors) == "string" then b.author = meta.authors end
             if type(meta.keywords) == "string" then b.keywords = meta.keywords end
             if type(meta.series) == "string" then b.series = meta.series end
+            if tonumber(meta.series_index) then b.series_index = tonumber(meta.series_index) end
+            if tonumber(meta.pages) and tonumber(meta.pages) > 0 then b.pages = tonumber(meta.pages) end
         end
     end
     table.sort(items, function(a, b) return a.title:lower() < b.title:lower() end)

@@ -6,6 +6,9 @@ local Button = require("ui/widget/button")
 local TextWidget = require("ui/widget/textwidget")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local ImageWidget = require("ui/widget/imagewidget")
+local OverlapGroup = require("ui/widget/overlapgroup")
+local ProgressWidget = require("ui/widget/progresswidget")
+local DocSettings = require("docsettings")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
@@ -66,7 +69,7 @@ local function two(a, b, aw, bw)
     return row{a(aw), hspace(GAP), b(bw)}
 end
 local function sectionTitle(t)
-    return stack{vspace(unit(14)),txt(t,21,true),vspace(unit(9))}
+    return stack{vspace(unit(13)),txt(t,20,true),vspace(unit(8))}
 end
 -- Slim dividers and framed content give a traditional editorial appearance,
 -- without relying on images, animations, or screen-specific drawing APIs.
@@ -96,23 +99,59 @@ local function trunc(s,n)
     return s:sub(1,n-3) .. "..."
 end
 
--- A true cover tile: shows a *previously cached* Cover Browser image where available.
--- Text-only placeholders are deliberate; we never open EPUBs to extract covers.
+-- All cover artwork uses existing Cover Browser cache entries. Badges read
+-- the book's own KOReader sidecar *without* writing to it or opening an EPUB.
+-- Pages left on reflowable EPUBs are estimates based on saved completion %.
+local function readProgress(book)
+    local total = tonumber(book.pages)
+    local percent, status, page
+    local has, exists = pcall(function() return DocSettings:hasSidecarFile(book.path) end)
+    if has and exists then
+        local ok, ds = pcall(function() return DocSettings:open(book.path) end)
+        if ok and ds then
+            percent = tonumber(ds:readSetting("percent_finished"))
+            local summary = ds:readSetting("summary") or {}
+            status = summary.status
+            local doc_pages = tonumber(ds:readSetting("doc_pages"))
+            if doc_pages and doc_pages > 0 then total = doc_pages end
+            page = tonumber(ds:readSetting("page"))
+        end
+    end
+    if percent then percent = math.min(1,math.max(0,percent)) end
+    if status == "complete" or status == "finished" then percent = 1 end
+    local left
+    if total and total > 0 then
+        if percent and percent > 0 then
+            -- Page counts in cached metadata and the saved EPUB position
+            -- aren't always based on identical pagination. Label estimates.
+            left = "~" .. math.max(0,math.ceil(total*(1-percent))) .. "p"
+        else
+            left = math.floor(total+0.5) .. "p"
+        end
+    end
+    if status == "complete" or status == "finished" then left = "✓" end
+    return percent,status,left
+end
+local function coverBadge(label)
+    return FrameContainer:new{bordersize=unit(1),color=MID,background=WHITE,
+        padding=unit(3),margin=0,radius=unit(3),
+        TextWidget:new{text=label,face=Font:getFace("cfont",unit(12)),
+            bold=true,fgcolor=BLACK}}
+end
 local CoverTile = InputContainer:extend{}
 function CoverTile:init()
     local book, cover_w, cover_h = self.book, self.tile_width, self.cover_height
-    local border, pad=unit(1),unit(3)
+    local border, pad = unit(1),unit(3)
     local inner_w,inner_h=cover_w-2*(border+pad),cover_h-2*(border+pad)
-    local coverWidget,info
+    local coverWidget, info
     if self.bookinfo then
-        local ok,cached=pcall(function()return self.bookinfo:getBookInfo(book.path,true)end)
+        local ok,cached=pcall(function() return self.bookinfo:getBookInfo(book.path,true) end)
         if ok then info=cached end
     end
     if info and info.has_cover and info.cover_bb and not info.ignore_cover then
         coverWidget=ImageWidget:new{image=info.cover_bb,width=inner_w,height=inner_h,
             scale_factor=0,image_disposable=true}
     else
-        -- Typographic placeholder, not a fabricated book cover.
         coverWidget=FrameContainer:new{bordersize=0,padding=0,margin=0,
             background=BLACK,
             CenterContainer:new{dimen=Geom:new{w=inner_w,h=inner_h},
@@ -121,11 +160,39 @@ function CoverTile:init()
     local coverFrame=FrameContainer:new{bordersize=border,color=GRAY,padding=pad,
         background=WHITE,margin=0,
         CenterContainer:new{dimen=Geom:new{w=inner_w,h=inner_h},coverWidget}}
-    local contents={coverFrame}
+    local layers={coverFrame}
+    local progress,status,bottom_label = readProgress(book)
+    if book.series_index and tonumber(book.series_index) then
+        local n=tonumber(book.series_index)
+        local number=n==math.floor(n) and tostring(math.floor(n)) or tostring(n)
+        local b=coverBadge("#"..number)
+        b.overlap_offset={cover_w-b:getSize().w-unit(2),unit(2)}
+        layers[#layers+1]=b
+    end
+    if status == "abandoned" or (self.paused and self.paused[book.path]) then
+        local b=coverBadge("II")
+        b.overlap_offset={unit(2),unit(2)}
+        layers[#layers+1]=b
+    end
+    if bottom_label then
+        local b=coverBadge(bottom_label)
+        b.overlap_offset={cover_w-b:getSize().w-unit(2),cover_h-b:getSize().h-unit(13)}
+        layers[#layers+1]=b
+    end
+    if progress and progress > 0 and progress < 1 then
+        local bar=ProgressWidget:new{width=cover_w-unit(14),height=unit(5),
+            percentage=progress,margin_h=0,margin_v=0,bordersize=unit(1),
+            bgcolor=WHITE,fillcolor=MID,bordercolor=MID}
+        bar.overlap_offset={unit(7),cover_h-unit(9)}
+        layers[#layers+1]=bar
+    end
+    local overlay=OverlapGroup:new{allow_mirroring=false,
+        dimen=Geom:new{w=cover_w,h=cover_h},unpack(layers)}
+    local contents={overlay}
     local extra_h=0
     if not self.hide_caption then
         extra_h=unit(43)
-        contents[#contents+1]=vspace(unit(6))
+        contents[#contents+1]=vspace(unit(5))
         contents[#contents+1]=paragraph(trunc(book.title,45),cover_w,15,unit(37))
     end
     self[1]=stack(contents)
@@ -181,21 +248,24 @@ function VisualUI:lookup(path)
     if Catalog.exists(path) then return {path=path,title=Catalog.fallback_title(path)} end
 end
 function VisualUI:header(text)
-    local side=unit(93)
+    local side=unit(90)
     return row{
-        btn("Back",side,function()
-            if self.page=="home" then self.plugin:closeVisual() else self:go("home") end
+        -- On Home, a second Exit/Back control is redundant with Close.
+        -- Use that space for a direct path into the bookshelves instead.
+        btn(self.page=="home" and "Shelves" or "Back",side,function()
+            if self.page=="home" then self.state.shelf="all";self:go("library")
+            else self:go("home") end
         end,{size=15,height=unit(47),bold=false}),
         hspace(unit(8)),
         CenterContainer:new{dimen=Geom:new{w=W-side*2-unit(16),h=unit(47)},
-            txt(trunc(text,24),22,true)},
+            txt(trunc(text,24),20,true)},
         hspace(unit(8)),
         btn("Close",side,function()self.plugin:closeVisual()end,
             {size=15,height=unit(47),bold=false}),
     }
 end
 function VisualUI:footer()
-    local labels={{"Home","home"},{"Moods","moods"},{"Shelves","library"},{"Queue","queue"}}
+    local labels={{"Home","home"},{"Mood","moods"},{"Shelves","library"},{"Queue","queue"}}
     local widgets={}
     local width=math.floor((W-3*GAP)/4)
     for i,v in ipairs(labels) do
@@ -215,114 +285,140 @@ end
 function VisualUI:cover(book,width,height,hide_caption)
     return CoverTile:new{book=book,bookinfo=self.bookinfo,
         tile_width=width,cover_height=height,hide_caption=hide_caption,
+        paused=getSetting(self.settings,"paused"),
         callback=function()self:details(book)end}
 end
+-- Curated home: mood choices first, then a compact current book, and
+-- a row of queued book covers. Visually related to Bookshelf, not a second
+-- large catalog screen. No dynamic scrolling or animations.
 function VisualUI:homeLayout()
     local content={
-        vspace(unit(17)),
-        txt("A LIBRARY FOR EVERY MOOD",13,true,W,MID),
-        vspace(unit(6)),
-        txt("What feels right today?",29,true),
+        vspace(unit(12)),
+        txt("YOUR READING ROOM",13,true,W,MID),
         vspace(unit(5)),
-        paragraph("Find your next read by feeling, not just by genre.",W,16,unit(34),MID),
-        vspace(unit(9)),
-        btn("Explore by mood  >",W,function()self:go("moods")end,
-            {height=unit(72),size=22,selected=true}),
-        vspace(unit(8)),
-        btn("Surprise me with a match",W,function()self:surprise()end,
-            {height=unit(43),size=16,bold=false}),
-        sectionTitle("Continue reading"),
+        txt("Find your next read",24,true),
+        vspace(unit(11)),
     }
+    local quick={{"Yearning","yearning"},{"Comforting","comfort"},
+        {"Atmospheric","atmosphere"},{"Heart-wrenching","heartbreak"}}
+    for i=1,#quick,2 do
+        local a,b=quick[i],quick[i+1]
+        content[#content+1]=two(
+            function(w)return btn(a[1],w,function()
+                self.state.selected[a[2]]=true;self:go("moods") end,
+                {height=unit(48),size=16,bold=false,
+                 selected=self.state.selected[a[2]]})end,
+            function(w)return btn(b[1],w,function()
+                self.state.selected[b[2]]=true;self:go("moods") end,
+                {height=unit(48),size=16,bold=false,
+                 selected=self.state.selected[b[2]]})end)
+        content[#content+1]=vspace(unit(7))
+    end
+    content[#content+1]=two(
+        function(w)return btn("All moods  >",w,function()self:go("moods")end,
+            {height=unit(44),size=16,selected=true})end,
+        function(w)return btn("Surprise me",w,function()self:surprise()end,
+            {height=unit(44),size=16,bold=false})end)
+    content[#content+1]=sectionTitle("Continue reading")
     local last=self:lookup(G_reader_settings:readSetting("lastfile"))
     if last then
-        local pad=unit(12)
-        local inner=W-2*(pad+unit(1))
-        local cover_w=unit(110)
-        local copy_w=inner-cover_w-unit(15)
-        local byline=last.author and last.author~="" and last.author or "Your current book"
-        content[#content+1]=card(row{
-            self:cover(last,cover_w,unit(153),true),
-            hspace(unit(15)),
+        local cover_w=unit(94)
+        local copy_w=W-cover_w-unit(19)
+        local byline=last.author and last.author~="" and last.author or "Current book"
+        local percent=readProgress(last)
+        local progress_label=percent and string.format("%d%% read",math.floor(percent*100+0.5)) or "In progress"
+        content[#content+1]=row{
+            self:cover(last,cover_w,unit(130),true),
+            hspace(unit(19)),
             stack{
-                paragraph(last.title,copy_w,21,unit(60)),
-                paragraph(trunc(byline,48),copy_w,15,unit(38),MID),
-                vspace(unit(8)),
-                btn("Continue reading",copy_w,function()self.plugin:openBook(last.path)end,
-                    {height=unit(43),size=16,selected=true}),
+                paragraph(trunc(last.title,48),copy_w,20,unit(47)),
+                paragraph(trunc(byline,44),copy_w,15,unit(28),MID),
+                txt(progress_label,14,false,copy_w,MID),
+                vspace(unit(7)),
+                btn("Continue  >",copy_w,function()self.plugin:openBook(last.path)end,
+                    {height=unit(42),size=16,selected=true}),
             },
-        },pad)
+        }
     else
-        content[#content+1]=card(paragraph(
-            "Your current book will appear here after you open an EPUB.",
-            W-2*unit(13),17,unit(72)),unit(12))
+        content[#content+1]=paragraph("Open an EPUB to show it here.",W,16,unit(45),MID)
     end
     content[#content+1]=sectionTitle("Up next")
     local queue=getSetting(self.settings,"queue")
-    if #queue==0 then
-        content[#content+1]=paragraph("Your queue is ready when you are. Add books from Shelves.",
-            W,16,unit(46),MID)
+    local upcoming={}
+    for _,path in ipairs(queue) do
+        if not last or path~=last.path then
+            local book=self:lookup(path)
+            if book then upcoming[#upcoming+1]=book end
+        end
+        if #upcoming >= 3 then break end
+    end
+    if #upcoming==0 then
+        content[#content+1]=paragraph("Your next reads will appear here.",W,16,unit(35),MID)
     else
-        local visible=0
-        for i=1,math.min(2,#queue) do
-            local b=self:lookup(queue[i])
-            if b then
-                visible=visible+1
-                content[#content+1]=btn(string.format("%02d   %s",i,trunc(b.title,44)),W,
-                    function()self:details(b)end,{height=unit(42),size=16,bold=false})
-                content[#content+1]=vspace(unit(6))
+        local gap=unit(14)
+        local tilew=math.floor((W-2*gap)/3)
+        local coverw=math.min(tilew-unit(30),unit(108))
+        local coverh=math.floor(coverw*1.39)
+        local blocks={}
+        for i=1,3 do
+            if i>1 then blocks[#blocks+1]=hspace(gap) end
+            if upcoming[i] then
+                blocks[#blocks+1]=stack{
+                    CenterContainer:new{dimen=Geom:new{w=tilew,h=coverh},
+                        self:cover(upcoming[i],coverw,coverh,true)},
+                    vspace(unit(4)),
+                    paragraph(trunc(upcoming[i].title,27),tilew,14,unit(34)),
+                }
+            else
+                blocks[#blocks+1]=hspace(tilew)
             end
         end
-        if visible==0 then
-            content[#content+1]=paragraph("Queued books could not be located. Refresh your catalog.",
-                W,16,unit(43),MID)
-        end
+        content[#content+1]=row(blocks)
     end
-    content[#content+1]=vspace(unit(11))
+    content[#content+1]=vspace(unit(10))
     content[#content+1]=two(
         function(w)return btn("Browse shelves",w,function()
-            self.state.shelf="all";self:go("library") end,{height=unit(51),size=16})end,
-        function(w)return btn("Paused books",w,function()
-            self.state.shelf="paused";self:go("library") end,{height=unit(51),size=16})end)
+            self.state.shelf="all";self:go("library") end,{height=unit(43),size=15,bold=false})end,
+        function(w)return btn("Reading queue",w,function()
+            self:go("queue") end,{height=unit(43),size=15,bold=false})end)
     return stack(content)
 end
 function VisualUI:moodsLayout()
     local content={
-        vspace(unit(17)),
-        txt("FOLLOW YOUR FEELING",13,true,W,MID),
+        vspace(unit(13)),
+        txt("MOOD PICKER",13,true,W,MID),
         vspace(unit(6)),
-        txt("Choose your mood",29,true),
-        vspace(unit(7)),
-        paragraph("Combine as many moods as you like. We will look for books that fit.",
-            W,16,unit(53),MID),
-        vspace(unit(11)),
+        txt("Choose your mood",25,true),
+        vspace(unit(5)),
+        paragraph("Choose one or more feelings.",W,16,unit(27),MID),
+        vspace(unit(12)),
     }
     local chosen=self.state.selected or {}
     for i=1,#BookMoods.all,2 do
         local a,b=BookMoods.all[i],BookMoods.all[i+1]
         content[#content+1]=two(
-            function(w)return btn((chosen[a.id] and "✓  " or "")..a.text,w,function()
-                chosen[a.id]=not chosen[a.id];self:go("moods")end,
-                {height=unit(73),size=18,bold=chosen[a.id],selected=chosen[a.id]})end,
-            function(w)return btn((chosen[b.id] and "✓  " or "")..b.text,w,function()
-                chosen[b.id]=not chosen[b.id];self:go("moods")end,
-                {height=unit(73),size=18,bold=chosen[b.id],selected=chosen[b.id]})end)
-        content[#content+1]=vspace(unit(10))
+            function(w)return btn((chosen[a.id] and "✓ " or "")..a.text,w,function()
+                chosen[a.id]=not chosen[a.id];self:go("moods") end,
+                {height=unit(63),size=17,bold=chosen[a.id],selected=chosen[a.id]})end,
+            function(w)return btn((chosen[b.id] and "✓ " or "")..b.text,w,function()
+                chosen[b.id]=not chosen[b.id];self:go("moods") end,
+                {height=unit(63),size=17,bold=chosen[b.id],selected=chosen[b.id]})end)
+        content[#content+1]=vspace(unit(8))
     end
     local cnt=0
     for _,m in ipairs(BookMoods.all) do if chosen[m.id] then cnt=cnt+1 end end
-    content[#content+1]=vspace(unit(6))
-    content[#content+1]=txt(cnt==0 and "Select at least one feeling" or
-        (cnt==1 and "1 feeling selected" or cnt.." feelings selected"),15,false,W,MID)
-    content[#content+1]=vspace(unit(12))
-    content[#content+1]=btn("Find my books  ("..cnt..")",W,function()
+    content[#content+1]=vspace(unit(5))
+    content[#content+1]=txt(cnt.." selected",15,true,W,MID)
+    content[#content+1]=vspace(unit(9))
+    content[#content+1]=btn("Show matches  ("..cnt..")",W,function()
         if cnt==0 then self:message("Choose at least one mood.");return end
         setSetting(self.settings,"selected_moods",chosen)
-        self.state.results_page=1;self:go("results")end,
-        {height=unit(62),size=20,enabled=cnt>0,selected=cnt>0})
-    content[#content+1]=vspace(unit(8))
-    content[#content+1]=btn("Clear selection",W,function()
-        self.state.selected={};self:go("moods")end,
-        {height=unit(40),size=15,bold=false})
+        self.state.results_page=1;self:go("results") end,
+        {height=unit(58),size=19,enabled=cnt>0,selected=cnt>0})
+    content[#content+1]=vspace(unit(7))
+    content[#content+1]=btn("Clear",W,function()
+        self.state.selected={};self:go("moods") end,
+        {height=unit(39),size=15,bold=false})
     return stack(content)
 end
 function VisualUI:filteredBooks()
@@ -394,24 +490,32 @@ function VisualUI:gallery(items, page_key, page_size)
     local page=self.state[page_key] or 1
     local pages=math.max(1,math.ceil(#items/page_size))
     if page>pages then page=pages;self.state[page_key]=page end
-    local cols=3
     local tilew=math.floor((W-2*GAP)/3)
-    local coverh=math.min(unit(219), math.floor(tilew*1.32))
+    local coverw=math.min(tilew-unit(20),unit(153))
+    local coverh=math.floor(coverw*1.39)
     for i=1,page_size,3 do
         local tiles={}
         for j=0,2 do
             if j>0 then tiles[#tiles+1]=hspace(GAP) end
             local b=items[(page-1)*page_size+i+j]
-            if b then tiles[#tiles+1]=self:cover(b, tilew, coverh)
+            if b then
+                tiles[#tiles+1]=stack{
+                    CenterContainer:new{dimen=Geom:new{w=tilew,h=coverh},
+                        self:cover(b,coverw,coverh,true)},
+                    vspace(unit(5)),
+                    paragraph(trunc(b.title,34),tilew,14,unit(37)),
+                }
             else tiles[#tiles+1]=hspace(tilew) end
         end
         content[#content+1]=row(tiles)
         content[#content+1]=vspace(unit(9))
     end
     content[#content+1]=two(
-        function(w) return btn("Previous",w,function() self.state[page_key]=math.max(1,page-1);self:go(self.page) end,{size=17,enabled=page>1}) end,
-        function(w) return btn("Next  "..page.."/"..pages,w,function()
-            self.state[page_key]=math.min(pages,page+1);self:go(self.page) end,{size=17,enabled=page<pages}) end)
+        function(w)return btn("Previous",w,function() self.state[page_key]=math.max(1,page-1);self:go(self.page) end,
+            {size=16,height=unit(43),enabled=page>1}) end,
+        function(w)return btn("Next  "..page.."/"..pages,w,function()
+            self.state[page_key]=math.min(pages,page+1);self:go(self.page) end,
+            {size=16,height=unit(43),enabled=page<pages}) end)
     return stack(content)
 end
 function VisualUI:libraryLayout()
@@ -429,9 +533,16 @@ function VisualUI:libraryLayout()
     end
     return stack(content)
 end
+-- Results are a temporary Bookshelf-like cover shelf, not a text-only
+-- ranking. Each cover gets a human-readable matching explanation.
 function VisualUI:resultsLayout()
-    local ids={}
-    for _, m in ipairs(BookMoods.all) do if self.state.selected[m.id] then ids[#ids+1]=m.id end end
+    local ids,labels={},{}
+    for _,m in ipairs(BookMoods.all) do
+        if self.state.selected[m.id] then
+            ids[#ids+1]=m.id
+            labels[#labels+1]=m.text
+        end
+    end
     local tags=getSetting(self.settings,"mood_tags")
     local scope=self.state.mood_scope or "all"
     local eligible=self.catalog
@@ -444,58 +555,111 @@ function VisualUI:resultsLayout()
     end
     local matches=BookMoods.matches(eligible,ids,tags,
         scope=="paused" and getSetting(self.settings,"paused") or nil)
-    local content={sectionTitle("Your matches  ·  "..#matches)}
-    local scopes={all="All books",unopened="Not opened here",paused="Paused only"}
+    local content={vspace(unit(12)),txt("YOUR MOOD SHELF",13,true,W,MID),
+        vspace(unit(4)),txt("Books for this mood",23,true),vspace(unit(7)),
+        paragraph(table.concat(labels,"  ·  "),W,15,unit(32),MID),
+        vspace(unit(9))}
+    local scopes={all="All books",unopened="Unread here",paused="Paused only"}
     local next_scope={all="unopened",unopened="paused",paused="all"}
     content[#content+1]=two(
-        function(w)return btn("Change moods",w,function()self:go("moods")end,{size=17}) end,
+        function(w)return btn("Edit moods",w,function()self:go("moods")end,
+            {height=unit(42),size=16})end,
         function(w)return btn(scopes[scope],w,function()
-            self.state.mood_scope=next_scope[scope];self.state.results_page=1;self:go("results") end,{size=17}) end)
-    content[#content+1]=vspace(unit(9))
+            self.state.mood_scope=next_scope[scope]
+            self.state.results_page=1;self:go("results") end,
+            {height=unit(42),size=16,bold=false})end)
+    content[#content+1]=vspace(unit(12))
+    content[#content+1]=txt(#matches.." matching books",16,true)
+    content[#content+1]=vspace(unit(10))
     if #matches==0 then
-        content[#content+1]=paragraph("No matching books yet. Open a book in Shelves > Book details > Edit mood tags, or use existing EPUB keyword metadata.",W,18,unit(125))
-    else
-        content[#content+1]=paragraph("Ranked by how many selected moods each book matches. Open a cover to see why.",W,16,unit(58))
-        local b={}
-        for _, match in ipairs(matches) do b[#b+1]=match.book end
-        content[#content+1]=self:gallery(b,"results_page",6)
+        content[#content+1]=paragraph(
+            "No books tagged for these moods yet. Open a book in Shelves, then choose Edit mood tags.",
+            W,17,unit(110),MID)
+        content[#content+1]=btn("Browse books to tag",W,function()
+            self.state.shelf="all";self:go("library") end,{height=unit(48),size=16})
+        return stack(content)
     end
+    local page=self.state.results_page or 1
+    local page_size=6
+    local pages=math.max(1,math.ceil(#matches/page_size))
+    if page>pages then page=pages;self.state.results_page=page end
+    local cols=3
+    local gap=GAP
+    local tilew=math.floor((W-2*gap)/cols)
+    local coverw=math.min(tilew-unit(20),unit(140))
+    local coverh=math.floor(coverw*1.39)
+    for i=1,page_size,3 do
+        local tiles={}
+        for j=0,2 do
+            if j>0 then tiles[#tiles+1]=hspace(gap) end
+            local m=matches[(page-1)*page_size+i+j]
+            if m then
+                local match=m
+                tiles[#tiles+1]=stack{
+                    CenterContainer:new{dimen=Geom:new{w=tilew,h=coverh},
+                        self:cover(match.book,coverw,coverh,true)},
+                    vspace(unit(4)),
+                    paragraph(trunc(match.book.title,28),tilew,14,unit(32)),
+                    paragraph(trunc(match.reason,40),tilew,12,unit(36),MID),
+                }
+            else tiles[#tiles+1]=hspace(tilew) end
+        end
+        content[#content+1]=row(tiles)
+        content[#content+1]=vspace(unit(8))
+    end
+    content[#content+1]=two(
+        function(w)return btn("Previous",w,function()
+            self.state.results_page=math.max(1,page-1);self:go("results") end,
+            {height=unit(42),size=15,enabled=page>1})end,
+        function(w)return btn("Next  "..page.."/"..pages,w,function()
+            self.state.results_page=math.min(pages,page+1);self:go("results") end,
+            {height=unit(42),size=15,enabled=page<pages})end)
     return stack(content)
 end
 function VisualUI:queueLayout()
     local queue=getSetting(self.settings,"queue")
-    local content={sectionTitle("Reading queue  ·  "..#queue),
-        paragraph("A flexible order. Use the arrow buttons to rearrange books.",W,16,unit(58))}
+    local content={vspace(unit(12)),txt("READING PLANS",13,true,W,MID),
+        vspace(unit(5)),txt("Your reading queue",24,true),vspace(unit(7)),
+        paragraph("Move books whenever your mood changes.",W,15,unit(32),MID),
+        vspace(unit(11))}
     if #queue==0 then
-        content[#content+1]=paragraph("Your queue is empty. Browse Shelves, open a book, and tap Add to queue.",W,18,unit(105))
+        content[#content+1]=paragraph("Your queue is empty. Browse your library to add a book.",
+            W,17,unit(90))
     else
+        local pages=math.max(1,math.ceil(#queue/5))
+        self.state.queue_page=math.min(self.state.queue_page or 1,pages)
         local start=(self.state.queue_page-1)*5+1
         for i=start,math.min(start+4,#queue) do
             local index,path=i,queue[i]
-            local b=self:lookup(path) or {path=path,title="Missing book (remove)"}
-            if b then
-                local name_w=W-unit(200)
-                content[#content+1]=row{
-                    btn(i..". "..trunc(b.title,25),name_w,function() self:details(b) end,{height=unit(72),size=17}),hspace(unit(4)),
-                    btn("↑",unit(52),function()
-                        if index>1 then queue[index],queue[index-1]=queue[index-1],queue[index];setSetting(self.settings,"queue",queue);self:go("queue") end
-                    end,{height=unit(72),enabled=i>1}),hspace(unit(4)),
-                    btn("↓",unit(52),function()
-                        if index<#queue then queue[index],queue[index+1]=queue[index+1],queue[index];setSetting(self.settings,"queue",queue);self:go("queue") end
-                    end,{height=unit(72),enabled=i<#queue}),hspace(unit(4)),
-                    btn("×",W-name_w-unit(116),function()
-                        table.remove(queue,index);setSetting(self.settings,"queue",queue)
-                        self.state.queue_page=math.max(1,math.min(self.state.queue_page,math.ceil(#queue/5)))
-                        self:go("queue") end,{height=unit(72),size=17}),
-                }
-                content[#content+1]=vspace(unit(7))
-            end
+            local b=self:lookup(path) or {path=path,title="Missing book"}
+            local thumb=unit(43)
+            local name_w=W-thumb-unit(190)
+            content[#content+1]=row{
+                self:cover(b,thumb,unit(62),true),hspace(unit(7)),
+                btn(i..". "..trunc(b.title,20),name_w,function()self:details(b)end,
+                    {height=unit(62),size=15,bold=false}),hspace(unit(5)),
+                btn("↑",unit(45),function()
+                    if index>1 then queue[index],queue[index-1]=queue[index-1],queue[index]
+                        setSetting(self.settings,"queue",queue);self:go("queue") end
+                end,{height=unit(62),enabled=i>1}),hspace(unit(4)),
+                btn("↓",unit(45),function()
+                    if index<#queue then queue[index],queue[index+1]=queue[index+1],queue[index]
+                        setSetting(self.settings,"queue",queue);self:go("queue") end
+                end,{height=unit(62),enabled=i<#queue}),hspace(unit(4)),
+                btn("×",W-thumb-name_w-unit(7)-unit(45)*2-unit(5)-unit(4)*2,function()
+                    table.remove(queue,index);setSetting(self.settings,"queue",queue)
+                    self.state.queue_page=math.max(1,math.min(self.state.queue_page,math.ceil(#queue/5)))
+                    self:go("queue") end,{height=unit(62),size=16}),
+            }
+            content[#content+1]=vspace(unit(8))
         end
-        local pages=math.max(1,math.ceil(#queue/5))
         content[#content+1]=two(
-            function(w)return btn("Previous",w,function()self.state.queue_page=math.max(1,self.state.queue_page-1);self:go("queue")end,{enabled=self.state.queue_page>1})end,
+            function(w)return btn("Previous",w,function()
+                self.state.queue_page=math.max(1,self.state.queue_page-1);self:go("queue") end,
+                {enabled=self.state.queue_page>1,height=unit(42),size=15})end,
             function(w)return btn("Next  "..self.state.queue_page.."/"..pages,w,function()
-                self.state.queue_page=math.min(pages,self.state.queue_page+1);self:go("queue") end,{enabled=self.state.queue_page<pages})end)
+                self.state.queue_page=math.min(pages,self.state.queue_page+1);self:go("queue") end,
+                {enabled=self.state.queue_page<pages,height=unit(42),size=15})end)
     end
     return stack(content)
 end
