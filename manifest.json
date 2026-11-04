@@ -1,15 +1,4 @@
 {
-  "plugins": {
-    "readingdashboard": {
-      "name": "Reading Dashboard",
-      "version": "0.5.3",
-      "description": "Custom reading dashboard and quick-reading menu for KOReader.",
-      "files": [
-        "_meta.lua",
-        "main.lua",
-        "updater.lua"
-      ]
-    },
     "tbrrecommender": {
       "name": "TBR Recommender",
       "version": "0.2.1",
@@ -24,8 +13,8 @@
     },
     "readingbrain": {
       "name": "Reading Brain",
-      "version": "0.7.0",
-      "description": "Unified reading history, personalized discovery, and reading patterns.",
+      "version": "0.8.0",
+      "description": "Unified reading history, discovery, statistics, and reading patterns.",
       "files": [
         "_meta.lua",
         "main.lua",
@@ -39,7 +28,8 @@
         "feedback.lua",
         "book_page.lua",
         "update_notifier.lua",
-        "updater.lua"
+        "updater.lua",
+        "README.md"
       ]
     }
   }
