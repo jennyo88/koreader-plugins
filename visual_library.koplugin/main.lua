@@ -1,4 +1,4 @@
--- Visual Library for KOReader, v0.3.0 curated reading-room design.
+-- Visual Library for KOReader, v0.3.1 with optional GitHub updates.
 -- This plugin does not replace or modify Bookshelf's data.
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local UIManager = require("ui/uimanager")
@@ -6,6 +6,7 @@ local LuaSettings = require("luasettings")
 local DataStorage = require("datastorage")
 local Catalog = require("catalog")
 local Moods = require("moods")
+local Updater = require("updater")
 local lfs = require("libs/libkoreader-lfs")
 local _ = require("gettext")
 
@@ -120,8 +121,91 @@ function VisualLibrary:addToMainMenu(items)
                 self:loadCatalog(true)
                 UIManager:show(require("ui/widget/infomessage"):new{ text = _("Visual Library catalog refreshed.") })
             end },
+            {
+                text = _("Settings & Updates"),
+                sub_item_table = {
+                    { text = _("Installed version: ") .. Updater.version,
+                      callback = function() self:showUpdateInfo() end },
+                    { text = _("Set GitHub update repository"),
+                      callback = function() self:editUpdateRepo() end },
+                    { text = _("Check for updates"),
+                      callback = function() self:checkForUpdates() end },
+                },
+            },
         },
     }
+end
+
+-- GitHub updates are deliberately opt-in and never run at startup.
+-- They are separate from KOReader's core updater and preserve all settings.
+local function showUpdateMessage(message)
+    UIManager:show(require("ui/widget/infomessage"):new{ text = message })
+end
+
+function VisualLibrary:showUpdateInfo()
+    local repo = settings:readSetting("update_repo")
+    showUpdateMessage("Visual Library v" .. Updater.version
+        .. "\nUpdate source: " .. (repo or "Not configured")
+        .. "\n\nUpdates use GitHub Releases. No update is downloaded until you approve it.")
+end
+
+function VisualLibrary:editUpdateRepo()
+    local InputDialog = require("ui/widget/inputdialog")
+    local dialog
+    dialog = InputDialog:new{
+        title = _("Visual Library update source"),
+        input = settings:readSetting("update_repo") or "",
+        hint = "GitHub owner/repository",
+        buttons = {{
+            { text = _("Cancel"), id = "close", callback = function() UIManager:close(dialog) end },
+            { text = _("Save"), is_enter_default = true, callback = function()
+                local value = (dialog:getInputText() or ""):gsub("^%s+", ""):gsub("%s+$", "")
+                if value == "" then
+                    settings:delSetting("update_repo")
+                    settings:flush()
+                    UIManager:close(dialog)
+                    showUpdateMessage(_("Update source cleared."))
+                elseif Updater.validRepo(value) then
+                    save("update_repo", value)
+                    UIManager:close(dialog)
+                    showUpdateMessage(_("Update source saved: ") .. value)
+                else
+                    showUpdateMessage(_("Enter a GitHub repository as owner/repository."))
+                end
+            end },
+        }},
+    }
+    UIManager:show(dialog)
+    dialog:onShowKeyboard()
+end
+
+function VisualLibrary:checkForUpdates()
+    local repo = settings:readSetting("update_repo")
+    if not Updater.validRepo(repo) then
+        showUpdateMessage(_("Set a GitHub update repository first. Open Visual Library > Settings & Updates > Set GitHub update repository."))
+        return
+    end
+    -- Keep file manager navigation undisturbed while checking and installing.
+    UIManager:nextTick(function()
+        local found, err = Updater.check(repo, DataStorage:getSettingsDir())
+        if not found then showUpdateMessage(err); return end
+        if not found.newer then
+            showUpdateMessage("Visual Library v" .. Updater.version .. " is up to date. Latest GitHub release: " .. found.tag)
+            return
+        end
+        local ConfirmBox = require("ui/widget/confirmbox")
+        UIManager:show(ConfirmBox:new{
+            text = "Visual Library " .. found.tag .. " is available (installed: v" .. Updater.version
+                .. ").\n\nInstall it now? Your Visual Library settings are kept. Restart KOReader afterwards.",
+            ok_text = _("Install update"),
+            ok_callback = function()
+                UIManager:nextTick(function()
+                    local ok, message = Updater.install(repo, found, DataStorage:getSettingsDir())
+                    showUpdateMessage(message)
+                end)
+            end,
+        })
+    end)
 end
 
 function VisualLibrary:loadCatalog(force)

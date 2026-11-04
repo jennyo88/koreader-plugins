@@ -1,4 +1,4 @@
-# Visual Library v0.3.0 — KOReader plugin
+# Visual Library v0.3.1 — KOReader plugin
 
 A compact, offline reading room and mood-based EPUB picker for KOReader, designed with the Kindle Paperwhite 7th generation in mind. **This plugin does not modify Bookshelf.**
 
@@ -13,7 +13,41 @@ A compact, offline reading room and mood-based EPUB picker for KOReader, designe
 
 **Pages remaining are approximate for reflowable EPUBs** because the displayed page count and saved percent progress can use different pagination bases. The badge is prefixed with `~` when estimated. Missing page counts stay hidden. These data are read from KOReader's existing cover cache and book sidecars; no EPUB is opened solely to index it.
 
-## Upgrade from v0.2.1
+## Install and update from the companion shell script
+
+The companion `install-visual_library.sh` is distributed **beside** the `visual_library.koplugin` folder, not inside it. Place both in the same directory and run:
+
+```sh
+sh install-visual_library.sh
+```
+
+The script finds `/mnt/us/koreader/plugins` on Kindle and replaces **only** `visual_library.koplugin` with the adjacent local folder. It stages files first and keeps the previous version as `plugins/.visual_library.koplugin.previous`. The `koreader/settings/visual_library.lua` settings file is never changed. Exit KOReader before running the script, then restart it.
+
+If your KOReader plugins directory differs:
+
+```sh
+sh install-visual_library.sh --target /path/to/koreader/plugins
+```
+
+After publishing to GitHub Releases, the same script can download the latest release from your repository:
+
+```sh
+sh install-visual_library.sh --repo OWNER/REPOSITORY
+```
+
+A release must have a semantic-version tag (e.g. `v0.3.1`) and attach `visual-library-koreader-v0.3.1.zip`, containing **only** the `visual_library.koplugin/` folder. The installer does not have a built-in repository URL.
+
+## Update from inside KOReader
+
+Under **Tools → More tools → Visual Library → Settings & Updates**:
+
+1. Choose **Set GitHub update repository** and enter `OWNER/REPOSITORY` after you publish Visual Library.
+2. Choose **Check for updates**. The plugin compares the installed version to the latest GitHub Release.
+3. Confirm installation when a newer release is available; restart KOReader to load it.
+
+Update checks are manual and require Wi-Fi and `curl` plus `unzip` on the Kindle. They do not run at startup. The updater preserves the `visual_library.lua` settings file and never writes to Bookshelf. **An update cannot be downloaded until you have published a GitHub Release.**
+
+## Upgrade from v0.3.0
 
 1. Exit KOReader completely.
 2. Extract the ZIP, then copy the included `visual_library.koplugin` directory to `/mnt/us/koreader/plugins/`, replacing the older plugin directory.
@@ -21,7 +55,7 @@ A compact, offline reading room and mood-based EPUB picker for KOReader, designe
 4. Restart KOReader, then open **Tools → More tools → Visual Library** or use your opt-in **Start with → visual library** option.
 5. Test **Home → Mood → Show matches**, open a match, and check **Shelves** and **Queue**.
 
-If there is a problem, exit KOReader and restore only the `visual_library.koplugin` directory from the v0.2.1 ZIP. Leave the settings file intact.
+If there is a problem, exit KOReader and restore only the `visual_library.koplugin` directory from the v0.3.0 ZIP. Leave the settings file intact.
 
 ## Features retained
 
@@ -35,7 +69,7 @@ If there is a problem, exit KOReader and restore only the `visual_library.koplug
 
 ## Notes
 
-- **Alpha version:** Lua files were syntax-checked and all six pages were constructed in a mocked widget environment at 758×1024 and 1072×1448. **Not yet tested on the physical Kindle after this update.**
+- **Alpha version:** The v0.3.0 UI was syntax-checked and simulated at Paperwhite resolutions. The v0.3.1 updater and installation script have not yet been tested on your physical Kindle. Test manually before selecting Start with.
 - Badges require saved sidecar or cached metadata. For books without a known page count or series index, there is no corresponding badge.
 - Mood matches depend on user-assigned tags or existing EPUB/Calibre keywords. Untagged books are not assigned fictional mood matches.
 - To update the catalog after copying new books, use **Tools → More tools → Visual Library → Refresh EPUB catalog**.
