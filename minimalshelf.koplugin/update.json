@@ -1,0 +1,6 @@
+{
+  "plugin": "minimalshelf",
+  "version": "0.2.0",
+  "channel": "stable",
+  "notes": "Added manual offline page-count extraction and Calibre #pages fallback."
+}
