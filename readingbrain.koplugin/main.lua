@@ -80,6 +80,7 @@ local StatsDialog =
         title = "",
         body = "",
         owner = nil,
+        button_rows = nil,
     }
 
 function StatsDialog:init()
@@ -168,24 +169,28 @@ function StatsDialog:init()
             }
     end
 
+    local button_rows =
+        self.button_rows
+        or {
+            {
+                {
+                    text = _("Close"),
+                    callback =
+                        function()
+                            if self.owner then
+                                self.owner:closeStatsDialog()
+                            else
+                                UIManager:close(self)
+                            end
+                        end,
+                },
+            },
+        }
+
     local buttons =
         ButtonTable:new{
             width = content_width,
-            buttons = {
-                {
-                    {
-                        text = _("Close"),
-                        callback =
-                            function()
-                                if self.owner then
-                                    self.owner:closeStatsDialog()
-                                else
-                                    UIManager:close(self)
-                                end
-                            end,
-                    },
-                },
-            },
+            buttons = button_rows,
         }
 
     local hint =
@@ -1120,7 +1125,7 @@ function ReadingBrain:withStatsContext(callback)
 end
 
 
-function ReadingBrain:showCardDialog(title, text)
+function ReadingBrain:showCardDialog(title, text, button_rows)
     self:closeStatsDialog()
 
     self.stats_dialog =
@@ -1128,6 +1133,7 @@ function ReadingBrain:showCardDialog(title, text)
             title = title,
             body = text,
             owner = self,
+            button_rows = button_rows,
         }
 
     UIManager:show(
@@ -1245,6 +1251,140 @@ function ReadingBrain:showPatternsAndRecords()
                 StatsPatterns:interestingPatterns(books)
                 .. "\n\n────────────────────\n\n"
                 .. StatsPatterns:readingRecords(books)
+            )
+        end
+    )
+end
+
+function ReadingBrain:showStatsPage(page_index, books)
+    local pages = {
+        {
+            title = "BY MONTH",
+            build =
+                function()
+                    return
+                        StatsPatterns:monthlyReading(
+                            books
+                        )
+                end,
+        },
+        {
+            title = "RATINGS & TASTE",
+            build =
+                function()
+                    return
+                        StatsPatterns:ratings(
+                            books
+                        )
+                        .. "\n\n────────────────────\n\n"
+                        .. StatsPatterns:authorsAndGenres(
+                            books
+                        )
+                end,
+        },
+        {
+            title = "READING HABITS",
+            build =
+                function()
+                    return
+                        StatsPatterns:readingHabits(
+                            books
+                        )
+                end,
+        },
+        {
+            title = "PATTERNS & RECORDS",
+            build =
+                function()
+                    return
+                        StatsPatterns:interestingPatterns(
+                            books
+                        )
+                        .. "\n\n────────────────────\n\n"
+                        .. StatsPatterns:readingRecords(
+                            books
+                        )
+                end,
+        },
+    }
+
+    if page_index < 1 then
+        page_index = #pages
+    elseif page_index > #pages then
+        page_index = 1
+    end
+
+    local page =
+        pages[page_index]
+
+    local ok, body =
+        pcall(page.build)
+
+    if not ok then
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Could not build reading statistics.\n\n"
+                    .. tostring(body),
+            }
+        )
+        return
+    end
+
+    local title =
+        page.title
+        .. "  •  "
+        .. tostring(page_index)
+        .. "/"
+        .. tostring(#pages)
+
+    local buttons = {
+        {
+            {
+                text = _("‹ Previous"),
+                callback =
+                    function()
+                        self:showStatsPage(
+                            page_index - 1,
+                            books
+                        )
+                    end,
+            },
+
+            {
+                text = _("Close"),
+                callback =
+                    function()
+                        self:closeStatsDialog()
+                    end,
+            },
+
+            {
+                text = _("Next ›"),
+                callback =
+                    function()
+                        self:showStatsPage(
+                            page_index + 1,
+                            books
+                        )
+                    end,
+            },
+        },
+    }
+
+    self:showCardDialog(
+        title,
+        body,
+        buttons
+    )
+end
+
+function ReadingBrain:showStatsPager()
+    self:withStatsContext(
+        function(books)
+            self:showStatsPage(
+                1,
+                books
             )
         end
     )
@@ -1417,40 +1557,10 @@ function ReadingBrain:addToMainMenu(menu_items)
             },
 
             {
-                text = _("Recent Sessions"),
-                callback = function()
-                    self:showRecentSessions()
-                end,
-            },
-
-            {
                 text = _("Stats & Patterns"),
-                sub_item_table = {
-                    {
-                        text = _("By Month"),
-                        callback = function()
-                            self:showMonthlyReading()
-                        end,
-                    },
-                    {
-                        text = _("Ratings & Taste"),
-                        callback = function()
-                            self:showRatingsAndTaste()
-                        end,
-                    },
-                    {
-                        text = _("Reading Habits"),
-                        callback = function()
-                            self:showReadingHabits()
-                        end,
-                    },
-                    {
-                        text = _("Patterns & Records"),
-                        callback = function()
-                            self:showPatternsAndRecords()
-                        end,
-                    },
-                },
+                callback = function()
+                    self:showStatsPager()
+                end,
             },
 
             {
