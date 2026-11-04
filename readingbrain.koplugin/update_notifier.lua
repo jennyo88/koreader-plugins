@@ -1,229 +1,41 @@
-local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
-local NetworkMgr = require("ui/network/manager")
-local Notification = require("ui/widget/notification")
-local UIManager = require("ui/uimanager")
-local ltn12 = require("ltn12")
-local rapidjson = require("rapidjson")
-local socketutil = require("socketutil")
-local https = require("ssl.https")
+local DataStorage = require("datastorage")
 
 local UpdateNotifier = {}
+UpdateNotifier.__index = UpdateNotifier
 
-local MANIFEST_URL =
-    "https://raw.githubusercontent.com/jennyo88/koreader-plugins/main/manifest.json"
-
--- Match Bookshelf-style behavior:
--- at most one background check per hour, and only after a wake.
-local CHECK_INTERVAL = 60 * 60
-local WAKE_DELAY = 6
-
-local function parse_version(version)
-    local result = {}
-
-    for piece in tostring(version or "0")
-        :gsub("^v", "")
-        :gmatch("([^.]+)") do
-
-        table.insert(
-            result,
-            tonumber(piece:match("^(%d+)")) or 0
+function UpdateNotifier:new(opts)
+    local o = setmetatable({}, self)
+    o.plugin_id = opts and opts.plugin_id or "readingbrain"
+    o.plugin_name = opts and opts.plugin_name or "Reading Brain"
+    o.current_version = opts and opts.current_version or "0.0.0"
+    o.settings =
+        LuaSettings:open(
+            DataStorage:getSettingsDir()
+            .. "/readingbrain_notifier.lua"
         )
-    end
-
-    return result
-end
-
-local function is_newer(remote, current)
-    local a = parse_version(remote)
-    local b = parse_version(current)
-    local count = math.max(#a, #b)
-
-    for i = 1, count do
-        local av = a[i] or 0
-        local bv = b[i] or 0
-
-        if av > bv then
-            return true
-        elseif av < bv then
-            return false
-        end
-    end
-
-    return false
-end
-
-local function fetch_manifest()
-    local sink = {}
-
-    socketutil:set_timeout(
-        socketutil.LARGE_BLOCK_TIMEOUT,
-        socketutil.LARGE_TOTAL_TIMEOUT
-    )
-
-    local ok, code, _, status = https.request{
-        url = MANIFEST_URL,
-        method = "GET",
-        sink = ltn12.sink.table(sink),
-        headers = {
-            ["User-Agent"] = "KOReader-ReadingBrain-Notifier",
-            ["Accept"] = "application/json",
-            ["Connection"] = "close",
-        },
-    }
-
-    socketutil:reset_timeout()
-
-    if not ok or tonumber(code) ~= 200 then
-        return nil,
-            "HTTP "
-            .. tostring(code or "?")
-            .. ": "
-            .. tostring(status or "request failed")
-    end
-
-    local parsed_ok, manifest =
-        pcall(
-            rapidjson.decode,
-            table.concat(sink)
-        )
-
-    if not parsed_ok
-        or type(manifest) ~= "table" then
-
-        return nil, "Could not parse manifest.json."
-    end
-
-    return manifest
-end
-
-function UpdateNotifier:new(args)
-    local o = {
-        plugin_id = args.plugin_id,
-        plugin_name = args.plugin_name,
-        current_version = args.current_version,
-        checking = false,
-    }
-
-    o.settings = LuaSettings:open(
-        DataStorage:getSettingsDir()
-        .. "/"
-        .. o.plugin_id
-        .. "_update_notice.lua"
-    )
-
-    setmetatable(o, {
-        __index = self,
-    })
-
     return o
 end
 
 function UpdateNotifier:isEnabled()
-    -- Opt-in, like Bookshelf. Missing setting means OFF.
-    return self.settings:isTrue("enabled")
+    return
+        self.settings:isTrue(
+            "enabled"
+        )
 end
 
-function UpdateNotifier:setEnabled(enabled)
-    if enabled then
+function UpdateNotifier:setEnabled(value)
+    if value then
         self.settings:makeTrue("enabled")
     else
         self.settings:makeFalse("enabled")
     end
-
     self.settings:flush()
 end
 
-function UpdateNotifier:isDue()
-    local last =
-        tonumber(
-            self.settings:readSetting(
-                "last_check",
-                0
-            )
-        )
-        or 0
-
-    return
-        os.time() - last
-        >= CHECK_INTERVAL
-end
-
-function UpdateNotifier:recordCheck()
-    self.settings:saveSetting(
-        "last_check",
-        os.time()
-    ):flush()
-end
-
-function UpdateNotifier:checkIfDue()
-    if self.checking
-        or not self:isEnabled()
-        or not self:isDue()
-        or not NetworkMgr:isOnline() then
-
-        return
-    end
-
-    self.checking = true
-
-    UIManager:scheduleIn(
-        0.2,
-        function()
-            local manifest =
-                fetch_manifest()
-
-            self.checking = false
-
-            if not manifest then
-                -- A failed network request does not consume the hourly check.
-                return
-            end
-
-            self:recordCheck()
-
-            local plugins =
-                manifest.plugins
-                or manifest
-
-            local entry =
-                type(plugins) == "table"
-                and plugins[self.plugin_id]
-                or nil
-
-            local remote =
-                type(entry) == "table"
-                and entry.version
-                or nil
-
-            if remote
-                and is_newer(
-                    remote,
-                    self.current_version
-                ) then
-
-                Notification:notify(
-                    self.plugin_name
-                    .. " "
-                    .. tostring(remote)
-                    .. " available"
-                )
-            end
-        end
-    )
-end
-
 function UpdateNotifier:onWake()
-    if not self:isEnabled() then
-        return
-    end
-
-    UIManager:scheduleIn(
-        WAKE_DELAY,
-        function()
-            self:checkIfDue()
-        end
-    )
+    -- Recovery build: intentionally no automatic network activity.
+    -- Manual update checks remain available under Settings & Updates.
 end
 
 return UpdateNotifier

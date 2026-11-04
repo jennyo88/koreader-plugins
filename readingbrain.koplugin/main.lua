@@ -22,7 +22,7 @@ local _ = require("gettext")
 
 local Screen = Device.screen
 
-local PLUGIN_VERSION = "0.7.0"
+local PLUGIN_VERSION = "0.8.0"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -40,11 +40,20 @@ local Library = dofile(plugin_dir .. "/library.lua")
 local Stats = dofile(plugin_dir .. "/stats.lua")
 local Brain = dofile(plugin_dir .. "/brain.lua")
 local Discovery = dofile(plugin_dir .. "/discovery.lua")
-local UpdateNotifier = dofile(plugin_dir .. "/update_notifier.lua")
+local UpdateNotifier
+do
+    local ok, mod =
+        pcall(
+            dofile,
+            plugin_dir .. "/update_notifier.lua"
+        )
+
+    if ok then
+        UpdateNotifier = mod
+    end
+end
+
 local StatsPatterns = dofile(plugin_dir .. "/stats_patterns.lua")
-local BackupHealth = dofile(plugin_dir .. "/backup_health.lua")
-local Feedback = dofile(plugin_dir .. "/feedback.lua")
-local BookPage = dofile(plugin_dir .. "/book_page.lua")
 
 local function loadUpdater()
     local updater_path = plugin_dir .. "/updater.lua"
@@ -309,47 +318,47 @@ local function short_path(path)
     return path:gsub("^/mnt/us/", "")
 end
 
-local function bookmory_as_of_text()
+local function bookmoryBackupDateText()
     local backup =
         Bookmory:findLatestBackup()
 
     if not backup then
-        return "Bookmory data • No backup found"
+        return "Bookmory data: no backup found"
     end
 
-    local name =
+    local filename =
         tostring(backup):match("([^/]+)$")
         or tostring(backup)
 
     local year, month, day =
-        name:match(
+        filename:match(
             "bookmory_(%d%d%d%d)(%d%d)(%d%d)"
         )
 
-    if year then
-        local timestamp =
-            os.time{
-                year = tonumber(year),
-                month = tonumber(month),
-                day = tonumber(day),
-                hour = 12,
-                min = 0,
-                sec = 0,
-            }
+    if not year then
+        return "Bookmory data: " .. filename
+    end
 
-        if timestamp then
-            return
-                "Bookmory data • As of "
-                .. os.date(
-                    "%b %d, %Y",
-                    timestamp
-                )
-        end
+    local timestamp =
+        os.time{
+            year = tonumber(year),
+            month = tonumber(month),
+            day = tonumber(day),
+            hour = 12,
+            min = 0,
+            sec = 0,
+        }
+
+    if not timestamp then
+        return "Bookmory data: " .. filename
     end
 
     return
-        "Bookmory data • "
-        .. name
+        "Bookmory data as of "
+        .. os.date(
+            "%b %d, %Y",
+            timestamp
+        )
 end
 
 local function authors_string(value)
@@ -364,12 +373,16 @@ function ReadingBrain:init()
     self.discovery_dialog = nil
     self.stats_dialog = nil
 
-    self.update_notifier =
-        UpdateNotifier:new{
-            plugin_id = "readingbrain",
-            plugin_name = "Reading Brain",
-            current_version = PLUGIN_VERSION,
-        }
+    if UpdateNotifier then
+        self.update_notifier =
+            UpdateNotifier:new{
+                plugin_id = "readingbrain",
+                plugin_name = "Reading Brain",
+                current_version = PLUGIN_VERSION,
+            }
+    else
+        self.update_notifier = nil
+    end
 
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
@@ -565,7 +578,6 @@ function ReadingBrain:syncUnifiedHistory()
     brain_db:close()
 
     Bookmory:cleanup(db_path)
-    BackupHealth:markSynced(backup)
     UIManager:close(status)
 
     local summary =
@@ -671,93 +683,39 @@ function ReadingBrain:showRecentSessions()
         self:showCardDialog(
             "RECENT SESSIONS",
             "No unified sessions yet.\n\n"
-            .. "Run Sync Reading History first."
+            .. "Run Sync Unified History first."
         )
         return
     end
 
-    local books =
-        self:loadBookmoryBooks()
-        or {}
-
-    local buttons = {}
+    local lines = {
+        "RECENT READING SESSIONS",
+        "",
+    }
 
     for _, s in ipairs(sessions) do
-        local selected = s
-
         local date =
             os.date(
                 "%b %d • %I:%M %p",
-                selected.start_time
-            )
-
-        local label =
-            date
-            .. "\n"
-            .. tostring(
-                selected.title
-                or "Unknown title"
-            )
-            .. "\n"
-            .. tostring(
-                selected.medium
-                or "Unknown"
-            )
-            .. " • "
-            .. hours_minutes(
-                selected.duration
+                s.start_time
             )
 
         table.insert(
-            buttons,
-            {
-                {
-                    text = label,
-
-                    callback =
-                        function()
-                            local body =
-                                BookPage:build(
-                                    selected.book_key,
-                                    selected.title,
-                                    books
-                                )
-
-                            self:showCardDialog(
-                                selected.title
-                                or "BOOK",
-                                body
-                            )
-                        end,
-                },
-            }
+            lines,
+            date
+            .. "\n"
+            .. s.title
+            .. "\n"
+            .. s.medium
+            .. " • "
+            .. hours_minutes(s.duration)
+            .. "\n"
         )
     end
 
-    table.insert(
-        buttons,
-        {
-            {
-                text = _("Close"),
-                callback =
-                    function()
-                        self:closeDiscoveryDialog()
-                    end,
-            },
-        }
-    )
-
-    self:closeDiscoveryDialog()
-
-    self.discovery_dialog =
-        ButtonDialog:new{
-            title = _("RECENT SESSIONS"),
-            title_align = "center",
-            buttons = buttons,
-        }
-
-    UIManager:show(
-        self.discovery_dialog
+    self:showCardDialog(
+        "RECENT SESSIONS",
+        table.concat(lines, "\n")
     )
 end
 
@@ -902,11 +860,6 @@ function ReadingBrain:discoverBooks()
         return
     end
 
-    recommendations =
-        Feedback:apply(
-            recommendations
-        )
-
     if #recommendations == 0 then
         UIManager:show(
             InfoMessage:new{
@@ -975,7 +928,11 @@ function ReadingBrain:discoverBooks()
                                 )
                                 or "Strong overall taste match"
 
-                            local detail =
+                            self:showCardDialog(
+                                tostring(
+                                    selected.title
+                                    or "BOOK MATCH"
+                                ),
                                 (
                                     author ~= ""
                                     and author
@@ -993,107 +950,11 @@ function ReadingBrain:discoverBooks()
                                 )
                                 .. "\n\nWHY READING BRAIN PICKED IT\n"
                                 .. reason
-
-                            local current =
-                                Feedback:label(
-                                    selected
+                                .. "\n\nOpen Library work:\n"
+                                .. tostring(
+                                    selected.key
+                                    or "Unknown"
                                 )
-
-                            if current then
-                                detail =
-                                    detail
-                                    .. "\n\nSTATUS\n"
-                                    .. current
-                            end
-
-                            self:closeDiscoveryDialog()
-
-                            self.discovery_dialog =
-                                ButtonDialog:new{
-                                    title =
-                                        tostring(
-                                            selected.title
-                                            or "BOOK MATCH"
-                                        ),
-
-                                    title_align =
-                                        "center",
-
-                                    buttons = {
-                                        {
-                                            {
-                                                text = detail,
-                                                enabled = false,
-                                            },
-                                        },
-
-                                        {
-                                            {
-                                                text =
-                                                    _("Want to Read"),
-
-                                                callback =
-                                                    function()
-                                                        Feedback:set(
-                                                            selected,
-                                                            "want"
-                                                        )
-
-                                                        self:closeDiscoveryDialog()
-                                                        self:discoverBooks()
-                                                    end,
-                                            },
-
-                                            {
-                                                text =
-                                                    _("Not for Me"),
-
-                                                callback =
-                                                    function()
-                                                        Feedback:set(
-                                                            selected,
-                                                            "dismiss"
-                                                        )
-
-                                                        self:closeDiscoveryDialog()
-                                                        self:discoverBooks()
-                                                    end,
-                                            },
-                                        },
-
-                                        {
-                                            {
-                                                text =
-                                                    _("Already Own"),
-
-                                                callback =
-                                                    function()
-                                                        Feedback:set(
-                                                            selected,
-                                                            "owned"
-                                                        )
-
-                                                        self:closeDiscoveryDialog()
-                                                        self:discoverBooks()
-                                                    end,
-                                            },
-
-                                            {
-                                                text =
-                                                    _("Back"),
-
-                                                callback =
-                                                    function()
-                                                        self:closeDiscoveryDialog()
-                                                        self:discoverBooks()
-                                                    end,
-                                            },
-                                        },
-                                    },
-                                }
-
-                            UIManager:show(
-                                self.discovery_dialog
                             )
                         end,
                 },
@@ -1303,51 +1164,33 @@ function ReadingBrain:showStatsPage(page_index, books)
     local pages = {
         {
             title = "BY MONTH",
-            build =
-                function()
-                    return
-                        StatsPatterns:monthlyReading(
-                            books
-                        )
-                end,
+            build = function()
+                return StatsPatterns:monthlyReading(books)
+            end,
         },
         {
             title = "RATINGS & TASTE",
-            build =
-                function()
-                    return
-                        StatsPatterns:ratings(
-                            books
-                        )
-                        .. "\n\n────────────────────\n\n"
-                        .. StatsPatterns:authorsAndGenres(
-                            books
-                        )
-                end,
+            build = function()
+                return
+                    StatsPatterns:ratings(books)
+                    .. "\n\n────────────────────\n\n"
+                    .. StatsPatterns:authorsAndGenres(books)
+            end,
         },
         {
             title = "READING HABITS",
-            build =
-                function()
-                    return
-                        StatsPatterns:readingHabits(
-                            books
-                        )
-                end,
+            build = function()
+                return StatsPatterns:readingHabits(books)
+            end,
         },
         {
             title = "PATTERNS & RECORDS",
-            build =
-                function()
-                    return
-                        StatsPatterns:interestingPatterns(
-                            books
-                        )
-                        .. "\n\n────────────────────\n\n"
-                        .. StatsPatterns:readingRecords(
-                            books
-                        )
-                end,
+            build = function()
+                return
+                    StatsPatterns:interestingPatterns(books)
+                    .. "\n\n────────────────────\n\n"
+                    .. StatsPatterns:readingRecords(books)
+            end,
         },
     }
 
@@ -1357,11 +1200,8 @@ function ReadingBrain:showStatsPage(page_index, books)
         page_index = 1
     end
 
-    local page =
-        pages[page_index]
-
-    local ok, body =
-        pcall(page.build)
+    local page = pages[page_index]
+    local ok, body = pcall(page.build)
 
     if not ok then
         UIManager:show(
@@ -1375,80 +1215,57 @@ function ReadingBrain:showStatsPage(page_index, books)
     end
 
     body =
-        bookmory_as_of_text()
+        bookmoryBackupDateText()
         .. "\n────────────────────\n\n"
         .. body
 
-    local title =
+    self:showCardDialog(
         page.title
-        .. "  •  "
+        .. "  "
         .. tostring(page_index)
         .. "/"
-        .. tostring(#pages)
-
-    local buttons = {
+        .. tostring(#pages),
+        body,
         {
             {
-                text = _("‹ Previous"),
-                callback =
-                    function()
-                        self:showStatsPage(
-                            page_index - 1,
-                            books
-                        )
+                {
+                    text = _("Previous"),
+                    callback = function()
+                        self:showStatsPage(page_index - 1, books)
                     end,
-            },
-
-            {
-                text = _("Close"),
-                callback =
-                    function()
+                },
+                {
+                    text = _("Close"),
+                    callback = function()
                         self:closeStatsDialog()
                     end,
-            },
-
-            {
-                text = _("Next ›"),
-                callback =
-                    function()
-                        self:showStatsPage(
-                            page_index + 1,
-                            books
-                        )
+                },
+                {
+                    text = _("Next"),
+                    callback = function()
+                        self:showStatsPage(page_index + 1, books)
                     end,
+                },
             },
-        },
-    }
-
-    self:showCardDialog(
-        title,
-        body,
-        buttons
+        }
     )
 end
 
 function ReadingBrain:showStatsPager()
     self:withStatsContext(
         function(books)
-            self:showStatsPage(
-                1,
-                books
-            )
+            self:showStatsPage(1, books)
         end
     )
 end
 
 function ReadingBrain:showDataStatus()
-    local health =
-        BackupHealth:getStatus()
-
     local backup =
-        health.path
-        or Bookmory:findLatestBackup()
+        Bookmory:findLatestBackup()
 
     if not backup then
         self:showCardDialog(
-            "DATA STATUS  •  MISSING",
+            "DATA STATUS",
             "No .bookmory backup was found.\n\n"
             .. "Expected folder:\n"
             .. "/mnt/us/readingbrain/"
@@ -1461,8 +1278,7 @@ function ReadingBrain:showDataStatus()
 
     if not db_path then
         self:showCardDialog(
-            "DATA STATUS  •  "
-            .. health.label,
+            "DATA STATUS",
             "Could not read the Bookmory backup.\n\n"
             .. tostring(err)
         )
@@ -1476,8 +1292,7 @@ function ReadingBrain:showDataStatus()
         Bookmory:cleanup(db_path)
 
         self:showCardDialog(
-            "DATA STATUS  •  "
-            .. health.label,
+            "DATA STATUS",
             tostring(read_err)
         )
         return
@@ -1521,8 +1336,10 @@ function ReadingBrain:showDataStatus()
         )
         or "\n\nUNIFIED CACHE\nNot synced yet."
 
-    local body =
-        BackupHealth:formatBody()
+    self:showCardDialog(
+        "DATA STATUS",
+        "BOOKMORY\n"
+        .. short_path(backup)
         .. "\n\n"
         .. string.format(
             "Books ............... %d\n",
@@ -1556,11 +1373,6 @@ function ReadingBrain:showDataStatus()
             matches.unmatched
         )
         .. sync_text
-
-    self:showCardDialog(
-        "DATA STATUS  •  "
-        .. health.label,
-        body
     )
 end
 

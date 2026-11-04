@@ -3,6 +3,6 @@ local _ = require("gettext")
 return {
     name = "readingbrain",
     fullname = _("Reading Brain"),
-    description = _("Read-only Bookmory + KOReader library analyzer."),
-    version = "0.6.0",
+    description = _("Unified reading history, discovery, statistics, and reading patterns."),
+    version = "0.8.0",
 }

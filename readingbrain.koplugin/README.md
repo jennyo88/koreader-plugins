@@ -1,53 +1,39 @@
-# Reading Brain v0.7.0 feature pack
+# Reading Brain 0.8.0 Recovery
 
-This release is designed around three improvements without adding menu clutter.
+This is a clean, internally consistent recovery release for KOReader.
 
-## Backup health
+## Menu
 
-Reading Brain can now distinguish:
+- Discover Books
+- Taste Profile
+- Reading Overview
+- Stats & Patterns
+- Data & Sync
+- Settings & Updates
 
-- `CURRENT` — backup is 0–6 days old
-- `AGING` — backup is 7–13 days old
-- `STALE` — backup is 14+ days old
-- `NEW BACKUP` — a newer Bookmory backup exists than the one last synced
-- `MISSING` — no Bookmory backup is available
+Recent Sessions has been removed from the main menu.
 
-The intended UI is a short status word in the top-right corner of the Data Status card.
+## Stats & Patterns
 
-## Discovery feedback
+Stats opens as a paged viewer:
 
-Recommendation feedback states:
+1. By Month
+2. Ratings & Taste
+3. Reading Habits
+4. Patterns & Records
 
-- Want to Read
-- Not for Me
-- Already Own
+Each page shows the date of the newest Bookmory backup.
 
-`Want to Read` boosts future ranking.
-`Not for Me` and `Already Own` are excluded from future results.
+## Data
 
-Feedback is stored separately from the Reading Brain database so rebuilding unified history does not erase it.
+Put Bookmory backups in:
 
-## Per-book Reading Brain page
+`/mnt/us/readingbrain/`
 
-A book page is intended to open from Recent Sessions and show:
+Then use:
 
-- session count
-- total reading time
-- average session
-- longest session
-- first and last session dates
-- Kindle vs Audiobook vs External/Hybrid time
-- Bookmory progress
-- Bookmory rating
+Reading Brain → Data & Sync → Sync Reading History
 
-This avoids another top-level menu item while making Recent Sessions substantially more useful.
+## Recovery design
 
-## Files
-
-Upload these new files to `readingbrain.koplugin/`:
-
-- `backup_health.lua`
-- `feedback.lua`
-- `book_page.lua`
-
-Then integrate the small `main.lua` changes described in `MAIN-INTEGRATION.md`.
+Automatic updater/network wake checks are intentionally conservative in this build so optional update features cannot make the plugin disappear.
