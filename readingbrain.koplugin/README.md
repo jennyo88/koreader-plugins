@@ -1,40 +1,126 @@
-# Reading Brain v0.6.0
+# Reading Brain v0.7.0 integration patch
 
-A cleanup release focused on making Reading Brain feel like one coherent KOReader plugin.
+This feature pack contains three new modules:
 
-## Simplified main menu
+- `backup_health.lua`
+- `feedback.lua`
+- `book_page.lua`
 
-```text
-Reading Brain
-├── Discover Books
-├── Taste Profile
-├── Reading Overview
-├── Recent Sessions
-├── Stats & Patterns
-│   ├── By Month
-│   ├── Ratings & Taste
-│   ├── Reading Habits
-│   └── Patterns & Records
-├── Data & Sync
-│   ├── Sync Reading History
-│   └── Data Status
-└── Settings & Updates
-    ├── Notify on wake when update available
-    ├── Check for Updates
-    ├── Restore Previous Version
-    └── About
+They are intentionally separate so the existing Reading Brain UI and sync code stay stable.
+
+## 1. Load the modules in `main.lua`
+
+Near the other plugin-local modules:
+
+```lua
+local BackupHealth =
+    dofile(plugin_dir .. "/backup_health.lua")
+
+local Feedback =
+    dofile(plugin_dir .. "/feedback.lua")
+
+local BookPage =
+    dofile(plugin_dir .. "/book_page.lua")
 ```
 
-## What was simplified
+## 2. Mark a Bookmory backup as synced
 
-- `Unified Summary`, `This Year`, and `Reading Formats` are consolidated into **Reading Overview**.
-- `Ratings` and `Authors & Genres` are consolidated into **Ratings & Taste**.
-- `Interesting Patterns` and `Reading Records` are consolidated into **Patterns & Records**.
-- legacy `Analyze Bookmory Backup` becomes **Data Status** and lives beside sync.
-- updater controls and About are grouped under **Settings & Updates**.
-- all informational result screens use the same Reading Brain card UI.
-- long cards remain scrollable.
-- zero-length reading sessions remain filtered out.
-- Bookshelf-style wake update notifications are preserved.
+At the end of a successful `Sync Reading History`, after the cache has been rebuilt:
 
-The discovery list stays tappable and native, while selected-book details use the Reading Brain card UI.
+```lua
+BackupHealth:markSynced(backup)
+```
+
+Do this only after a successful sync.
+
+## 3. Data Status header
+
+When building Data Status:
+
+```lua
+local backup_status =
+    BackupHealth:getStatus()
+```
+
+Use:
+
+```lua
+backup_status.label
+```
+
+as the small right-aligned header status:
+
+- CURRENT
+- AGING
+- STALE
+- NEW BACKUP
+- MISSING
+
+The body can include:
+
+```lua
+BackupHealth:formatBody()
+```
+
+## 4. Discovery feedback
+
+After `Discovery:scoreCandidates(...)`:
+
+```lua
+scored =
+    Feedback:apply(scored)
+```
+
+On the selected recommendation detail screen add three actions:
+
+```text
+Want to Read
+Not for Me
+Already Own
+```
+
+Callbacks:
+
+```lua
+Feedback:set(selected, "want")
+Feedback:set(selected, "dismiss")
+Feedback:set(selected, "owned")
+```
+
+`Not for Me` and `Already Own` disappear from future discovery results.
+`Want to Read` receives a large ranking boost.
+
+## 5. Per-book Reading Brain page
+
+For each Recent Sessions row, keep `book_key` and `title`.
+
+On tap:
+
+```lua
+local books =
+    self:loadBookmoryBooks()
+
+local body =
+    BookPage:build(
+        session.book_key,
+        session.title,
+        books or {}
+    )
+
+self:showCardDialog(
+    session.title or "BOOK",
+    body
+)
+```
+
+This gives:
+- total reading time
+- session count
+- average session
+- longest session
+- first/last session
+- Kindle/audio/hybrid split
+- Bookmory progress
+- Bookmory rating
+
+The book page should open from Recent Sessions rather than adding another top-level menu item.
