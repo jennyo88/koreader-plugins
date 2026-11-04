@@ -24,8 +24,8 @@
     },
     "readingbrain": {
       "name": "Reading Brain",
-      "version": "0.6.0",
-      "description": "Unified reading history and personalized book discovery.",
+      "version": "0.7.0",
+      "description": "Unified reading history, personalized discovery, and reading patterns.",
       "files": [
         "_meta.lua",
         "main.lua",
@@ -35,6 +35,9 @@
         "brain.lua",
         "discovery.lua",
         "stats_patterns.lua",
+        "backup_health.lua",
+        "feedback.lua",
+        "book_page.lua",
         "update_notifier.lua",
         "updater.lua"
       ]
