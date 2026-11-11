@@ -45,6 +45,41 @@ local function open_settings()
     return LuaSettings:open(SETTINGS_PATH)
 end
 
+local function compact_book(book)
+    return {
+        key = book.key,
+        title = book.title,
+        authors = book.authors or {},
+        year = book.year,
+        score = book.score,
+        reasons = book.reasons or {},
+        confidence = book.confidence,
+        saved_at = os.time(),
+    }
+end
+
+local function saved_books(settings)
+    local saved = settings:readSetting("saved_books")
+
+    if type(saved) ~= "table" then
+        return {}
+    end
+
+    return saved
+end
+
+local function remove_saved(saved, book_key)
+    local result = {}
+
+    for _, book in ipairs(saved or {}) do
+        if key_for(book) ~= book_key then
+            table.insert(result, book)
+        end
+    end
+
+    return result
+end
+
 function Feedback:get(book)
     local key = key_for(book)
 
@@ -69,6 +104,17 @@ function Feedback:set(book, value)
 
     local s = open_settings()
     s:saveSetting("book_" .. key, value)
+
+    local saved = remove_saved(
+        saved_books(s),
+        key
+    )
+
+    if value == "want" then
+        table.insert(saved, 1, compact_book(book))
+    end
+
+    s:saveSetting("saved_books", saved)
     s:flush()
 
     return true
@@ -83,20 +129,51 @@ function Feedback:clear(book)
 
     local s = open_settings()
     s:delSetting("book_" .. key)
+    s:saveSetting(
+        "saved_books",
+        remove_saved(
+            saved_books(s),
+            key
+        )
+    )
     s:flush()
 end
 
-function Feedback:apply(candidates)
+function Feedback:listWanted()
+    local s = open_settings()
+    local saved = saved_books(s)
+    local result = {}
+
+    for _, book in ipairs(saved) do
+        if self:get(book) == "want" then
+            book.feedback = "want"
+            table.insert(result, book)
+        end
+    end
+
+    table.sort(
+        result,
+        function(a, b)
+            return
+                (tonumber(a.saved_at) or 0)
+                > (tonumber(b.saved_at) or 0)
+        end
+    )
+
+    return result
+end
+
+function Feedback:apply(candidates, include_wanted)
     local result = {}
 
     for _, candidate in ipairs(candidates or {}) do
         local state = self:get(candidate)
 
         if state ~= "dismiss"
-            and state ~= "owned" then
+            and state ~= "owned"
+            and (include_wanted or state ~= "want") then
 
             candidate.feedback = state
-            candidate.want_priority = state == "want" and 1 or 0
             table.insert(result, candidate)
         end
     end
@@ -104,11 +181,11 @@ function Feedback:apply(candidates)
     table.sort(
         result,
         function(a, b)
-            local aw = tonumber(a.want_priority) or 0
-            local bw = tonumber(b.want_priority) or 0
+            local ac = tonumber(a.confidence_rank) or 0
+            local bc = tonumber(b.confidence_rank) or 0
 
-            if aw ~= bw then
-                return aw > bw
+            if ac ~= bc then
+                return ac > bc
             end
 
             local as = tonumber(a.score) or 0
@@ -131,7 +208,7 @@ function Feedback:label(book)
     local state = self:get(book)
 
     if state == "want" then
-        return "WANT TO READ"
+        return "SAVED"
     elseif state == "dismiss" then
         return "NOT FOR ME"
     elseif state == "owned" then

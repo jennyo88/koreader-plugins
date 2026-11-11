@@ -399,67 +399,155 @@ function Discovery:scoreCandidates(profile, candidates)
 
     for _, candidate in ipairs(candidates or {}) do
         local score = 0
+        local positive_evidence = 0
+        local negative_evidence = 0
         local reasons = {}
         local matched_tags = {}
+        local avoided_tags = {}
 
         for _, subject in ipairs(candidate.subjects or {}) do
             local key = normalize(subject)
             local weight = profile.tag_scores[key]
+            local count = profile.tag_counts[key] or 0
 
             if weight then
-                score = score + weight
+                if weight > 0 then
+                    score = score + weight
+                    positive_evidence =
+                        positive_evidence + math.max(1, count)
 
-                if weight >= 2 and #matched_tags < 3 then
-                    table.insert(matched_tags, subject)
+                    if weight >= 2 and #matched_tags < 3 then
+                        table.insert(
+                            matched_tags,
+                            {
+                                label = subject,
+                                count = count,
+                                score = weight,
+                            }
+                        )
+                    end
+                elseif weight < 0 then
+                    local penalty = math.abs(weight) * 0.75
+                    score = score - penalty
+                    negative_evidence =
+                        negative_evidence + math.max(1, count)
+
+                    if #avoided_tags < 2 then
+                        table.insert(avoided_tags, subject)
+                    end
                 end
             end
         end
 
+        table.sort(
+            matched_tags,
+            function(a, b)
+                if a.score == b.score then
+                    return a.count > b.count
+                end
+                return a.score > b.score
+            end
+        )
+
         local author_bonus = 0
+        local known_author
 
         for _, author in ipairs(candidate.authors or {}) do
             local weight = profile.author_scores[normalize(author)]
 
             if weight and weight > 0 then
-                author_bonus = math.max(
-                    author_bonus,
-                    weight * 0.5
-                )
+                local bonus = math.min(weight * 0.5, 6)
+
+                if bonus > author_bonus then
+                    author_bonus = bonus
+                    known_author = author
+                end
             end
         end
 
         score = score + author_bonus
 
         if #matched_tags > 0 then
+            local labels = {}
+
+            for _, item in ipairs(matched_tags) do
+                table.insert(labels, item.label)
+            end
+
             table.insert(
                 reasons,
-                "Matches: "
-                .. table.concat(matched_tags, ", ")
+                "Taste match: "
+                .. table.concat(labels, ", ")
             )
         end
 
-        if author_bonus > 0 then
+        if known_author then
             table.insert(
                 reasons,
-                "Author you've rated well"
+                "Author affinity: "
+                .. tostring(known_author)
             )
         else
             score = score + 0.5
+            table.insert(
+                reasons,
+                "New author for you"
+            )
+        end
+
+        if negative_evidence > positive_evidence
+            and negative_evidence >= 2 then
+
+            score = score - 2
+        end
+
+        local confidence
+        local confidence_rank
+
+        if positive_evidence >= 8
+            or (positive_evidence >= 4 and author_bonus > 0) then
+
+            confidence = "HIGH"
+            confidence_rank = 3
+        elseif positive_evidence >= 3
+            or author_bonus > 0 then
+
+            confidence = "MEDIUM"
+            confidence_rank = 2
+        else
+            confidence = "EXPLORATORY"
+            confidence_rank = 1
         end
 
         candidate.score = score
         candidate.reasons = reasons
+        candidate.confidence = confidence
+        candidate.confidence_rank = confidence_rank
+        candidate.positive_evidence = positive_evidence
+        candidate.negative_evidence = negative_evidence
 
         table.insert(scored, candidate)
     end
 
-    table.sort(scored, function(a, b)
-        if a.score == b.score then
-            return (a.title or "") < (b.title or "")
-        end
+    table.sort(
+        scored,
+        function(a, b)
+            local ac = tonumber(a.confidence_rank) or 0
+            local bc = tonumber(b.confidence_rank) or 0
 
-        return a.score > b.score
-    end)
+            if ac ~= bc then
+                return ac > bc
+            end
+
+            if a.score == b.score then
+                return
+                    tostring(a.title or "")
+                    < tostring(b.title or "")
+            end
+
+            return a.score > b.score
+        end
+    )
 
     return scored
 end

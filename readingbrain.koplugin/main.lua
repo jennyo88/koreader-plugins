@@ -22,7 +22,7 @@ local _ = require("gettext")
 
 local Screen = Device.screen
 
-local PLUGIN_VERSION = "0.8.2"
+local PLUGIN_VERSION = "0.8.3"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -350,6 +350,18 @@ local function hours_minutes(seconds)
     )
 end
 
+local function normalize_text(value)
+    if type(value) ~= "string" then
+        return ""
+    end
+
+    value = value:lower()
+    value = value:gsub("&", " and ")
+    value = value:gsub("[^%w%s]", " ")
+    value = value:gsub("%s+", " ")
+    return value:match("^%s*(.-)%s*$") or ""
+end
+
 local function short_path(path)
     if not path then
         return ""
@@ -510,6 +522,9 @@ end
 
 function ReadingBrain:init()
     self.discovery_dialog = nil
+    self.discovery_pool = nil
+    self.discovery_profile = nil
+    self.discovery_used_cache = false
     self.stats_dialog = nil
     self.bookmory_cache = nil
     self.kindle_cache = nil
@@ -933,7 +948,455 @@ function ReadingBrain:showTasteProfile()
     )
 end
 
-function ReadingBrain:discoverBooks()
+local function discovery_author(book)
+    return table.concat(
+        book.authors or {},
+        ", "
+    )
+end
+
+local function discovery_detail_text(book)
+    local author = discovery_author(book)
+    local lines = {
+        author ~= "" and author or "Unknown author",
+    }
+
+    if book.year then
+        table.insert(
+            lines,
+            "First published: "
+            .. tostring(book.year)
+        )
+    end
+
+    table.insert(lines, "")
+    table.insert(lines, "WHY READING BRAIN PICKED IT")
+
+    if #(book.reasons or {}) > 0 then
+        for _, reason in ipairs(book.reasons) do
+            table.insert(lines, "• " .. tostring(reason))
+        end
+    else
+        table.insert(
+            lines,
+            "• Exploratory match based on your broader taste profile"
+        )
+    end
+
+    table.insert(lines, "")
+    table.insert(
+        lines,
+        "Confidence .......... "
+        .. tostring(book.confidence or "EXPLORATORY")
+    )
+
+    local current = Feedback:label(book)
+
+    if current then
+        table.insert(
+            lines,
+            "Status .............. "
+            .. current
+        )
+    end
+
+    return table.concat(lines, "\n")
+end
+
+function ReadingBrain:discoveryRecommendations()
+    local ranked =
+        Feedback:apply(
+            self.discovery_pool or {},
+            false
+        )
+
+    local recommendations = {}
+    local used_authors = {}
+
+    -- First pass: favor variety so one author does not consume the page.
+    for _, book in ipairs(ranked) do
+        if #recommendations >= 5 then
+            break
+        end
+
+        local author_key =
+            normalize_text(
+                (book.authors or {})[1]
+                or ""
+            )
+
+        if author_key == ""
+            or not used_authors[author_key] then
+
+            table.insert(recommendations, book)
+
+            if author_key ~= "" then
+                used_authors[author_key] = true
+            end
+        end
+    end
+
+    -- Fill remaining slots if diversity filtering left fewer than five.
+    if #recommendations < 5 then
+        local included = {}
+
+        for _, book in ipairs(recommendations) do
+            included[tostring(book.key or book.title)] = true
+        end
+
+        for _, book in ipairs(ranked) do
+            if #recommendations >= 5 then
+                break
+            end
+
+            local key =
+                tostring(book.key or book.title)
+
+            if not included[key] then
+                included[key] = true
+                table.insert(recommendations, book)
+            end
+        end
+    end
+
+    return recommendations
+end
+
+function ReadingBrain:showDiscoveryBook(book, from_saved)
+    self:closeDiscoveryDialog()
+
+    local action_rows
+
+    if from_saved then
+        action_rows = {
+            {
+                {
+                    text = _("Remove Saved"),
+                    callback =
+                        function()
+                            Feedback:clear(book)
+                            self:closeStatsDialog()
+                            self:showSavedRecommendations()
+                        end,
+                },
+                {
+                    text = _("Not for Me"),
+                    callback =
+                        function()
+                            Feedback:set(book, "dismiss")
+                            self:closeStatsDialog()
+                            self:showSavedRecommendations()
+                        end,
+                },
+            },
+            {
+                {
+                    text = _("Already Own"),
+                    callback =
+                        function()
+                            Feedback:set(book, "owned")
+                            self:closeStatsDialog()
+                            self:showSavedRecommendations()
+                        end,
+                },
+                {
+                    text = _("Back"),
+                    callback =
+                        function()
+                            self:closeStatsDialog()
+                            self:showSavedRecommendations()
+                        end,
+                },
+            },
+        }
+    else
+        action_rows = {
+            {
+                {
+                    text = _("Save"),
+                    callback =
+                        function()
+                            Feedback:set(book, "want")
+                            self:closeStatsDialog()
+                            self:showDiscoveryResults()
+                        end,
+                },
+                {
+                    text = _("Not for Me"),
+                    callback =
+                        function()
+                            Feedback:set(book, "dismiss")
+                            self:closeStatsDialog()
+                            self:showDiscoveryResults()
+                        end,
+                },
+            },
+            {
+                {
+                    text = _("Already Own"),
+                    callback =
+                        function()
+                            Feedback:set(book, "owned")
+                            self:closeStatsDialog()
+                            self:showDiscoveryResults()
+                        end,
+                },
+                {
+                    text = _("Back"),
+                    callback =
+                        function()
+                            self:closeStatsDialog()
+                            self:showDiscoveryResults()
+                        end,
+                },
+            },
+        }
+    end
+
+    self:showCardDialog(
+        tostring(book.title or "BOOK MATCH"),
+        discovery_detail_text(book),
+        action_rows,
+        from_saved and "SAVED RECOMMENDATION" or "DISCOVER BOOKS",
+        book.score
+            and (
+                "Taste score "
+                .. string.format("%.1f", book.score)
+            )
+            or "Reading Brain"
+    )
+end
+
+function ReadingBrain:showSavedRecommendations()
+    self:closeDiscoveryDialog()
+    self:closeStatsDialog()
+
+    local saved = Feedback:listWanted()
+
+    if #saved == 0 then
+        self:showCardDialog(
+            "SAVED BOOKS",
+            "No saved recommendations yet.\n\n"
+            .. "Choose Save on a Discover Books recommendation and it will appear here.",
+            {
+                {
+                    {
+                        text = _("Back"),
+                        callback =
+                            function()
+                                self:closeStatsDialog()
+                                self:showDiscoveryResults()
+                            end,
+                    },
+                },
+            },
+            "DISCOVER BOOKS"
+        )
+        return
+    end
+
+    local buttons = {}
+
+    for i, book in ipairs(saved) do
+        local selected = book
+        local author = discovery_author(selected)
+        local label =
+            tostring(i)
+            .. ". "
+            .. tostring(selected.title or "Unknown title")
+
+        if author ~= "" then
+            label = label .. "\n" .. author
+        end
+
+        table.insert(
+            buttons,
+            {
+                {
+                    text = label,
+                    callback =
+                        function()
+                            self:showDiscoveryBook(
+                                selected,
+                                true
+                            )
+                        end,
+                },
+            }
+        )
+    end
+
+    table.insert(
+        buttons,
+        {
+            {
+                text = _("Back"),
+                callback =
+                    function()
+                        self:closeDiscoveryDialog()
+                        self:showDiscoveryResults()
+                    end,
+            },
+            {
+                text = _("Close"),
+                callback =
+                    function()
+                        self:closeDiscoveryDialog()
+                    end,
+            },
+        }
+    )
+
+    self.discovery_dialog =
+        ButtonDialog:new{
+            title =
+                _("SAVED BOOKS")
+                .. "\n"
+                .. tostring(#saved)
+                .. _(" saved"),
+            title_align = "center",
+            buttons = buttons,
+        }
+
+    UIManager:show(self.discovery_dialog)
+end
+
+function ReadingBrain:showDiscoveryResults()
+    self:closeDiscoveryDialog()
+    self:closeStatsDialog()
+
+    local recommendations =
+        self:discoveryRecommendations()
+
+    local saved_count =
+        #Feedback:listWanted()
+
+    if #recommendations == 0 then
+        self:showCardDialog(
+            "DISCOVER BOOKS",
+            "No fresh recommendations remain in this set.\n\n"
+            .. "Refresh to search for another group of books.",
+            {
+                {
+                    {
+                        text =
+                            _("Saved (")
+                            .. tostring(saved_count)
+                            .. ")",
+                        callback =
+                            function()
+                                self:closeStatsDialog()
+                                self:showSavedRecommendations()
+                            end,
+                    },
+                    {
+                        text = _("Refresh"),
+                        callback =
+                            function()
+                                self:closeStatsDialog()
+                                self:discoverBooks(true)
+                            end,
+                    },
+                },
+            },
+            "FRESH PICKS"
+        )
+        return
+    end
+
+    local buttons = {}
+
+    for i, book in ipairs(recommendations) do
+        local selected = book
+        local author = discovery_author(selected)
+        local label =
+            tostring(i)
+            .. ". "
+            .. tostring(selected.title or "Unknown title")
+
+        if author ~= "" then
+            label = label .. "\n" .. author
+        end
+
+        label =
+            label
+            .. "\n"
+            .. tostring(selected.confidence or "EXPLORATORY")
+            .. " MATCH"
+
+        table.insert(
+            buttons,
+            {
+                {
+                    text = label,
+                    callback =
+                        function()
+                            self:showDiscoveryBook(
+                                selected,
+                                false
+                            )
+                        end,
+                },
+            }
+        )
+    end
+
+    table.insert(
+        buttons,
+        {
+            {
+                text =
+                    _("Saved (")
+                    .. tostring(saved_count)
+                    .. ")",
+                callback =
+                    function()
+                        self:closeDiscoveryDialog()
+                        self:showSavedRecommendations()
+                    end,
+            },
+            {
+                text = _("Refresh"),
+                callback =
+                    function()
+                        self:closeDiscoveryDialog()
+                        self:discoverBooks(true)
+                    end,
+            },
+            {
+                text = _("Close"),
+                callback =
+                    function()
+                        self:closeDiscoveryDialog()
+                    end,
+            },
+        }
+    )
+
+    local profile = self.discovery_profile or {}
+    local subtitle =
+        tostring(profile.rated_books or 0)
+        .. " rated books • "
+        .. (
+            self.discovery_used_cache
+            and "cached catalog"
+            or "fresh catalog"
+        )
+
+    self.discovery_dialog =
+        ButtonDialog:new{
+            title =
+                _("DISCOVER BOOKS")
+                .. "\n"
+                .. subtitle,
+            title_align = "center",
+            buttons = buttons,
+        }
+
+    UIManager:show(self.discovery_dialog)
+end
+
+function ReadingBrain:discoverBooks(force_refresh)
     if not modulesReady(
         "Discover Books",
         {
@@ -946,8 +1409,16 @@ function ReadingBrain:discoverBooks()
         return
     end
 
+    if not force_refresh
+        and self.discovery_pool
+        and #self.discovery_pool > 0 then
+
+        self:showDiscoveryResults()
+        return
+    end
+
     local status = InfoMessage:new{
-        text = _("Finding books you may like…"),
+        text = _("Finding fresh book matches…"),
     }
 
     UIManager:show(status)
@@ -970,7 +1441,7 @@ function ReadingBrain:discoverBooks()
 
     local kindle_books = self:getKindleBooks()
 
-    local pool, discover_err =
+    local pool, discover_err, profile =
         Discovery:recommend(
             books,
             kindle_books,
@@ -990,222 +1461,15 @@ function ReadingBrain:discoverBooks()
         return
     end
 
-    local ranked = Feedback:apply(pool)
-    local recommendations = {}
+    self.discovery_pool = pool
+    self.discovery_profile = profile
+    self.discovery_used_cache =
+        pool[1]
+        and pool[1].used_cache
+        and true
+        or false
 
-    for i = 1, math.min(5, #ranked) do
-        table.insert(
-            recommendations,
-            ranked[i]
-        )
-    end
-
-    if #recommendations == 0 then
-        UIManager:show(
-            InfoMessage:new{
-                text =
-                    "No new recommendations were found this time.",
-            }
-        )
-        return
-    end
-
-    local buttons = {}
-
-    for i, book in ipairs(recommendations) do
-        local selected = book
-        local author =
-            table.concat(
-                selected.authors or {},
-                ", "
-            )
-
-        local label =
-            tostring(i)
-            .. ". "
-            .. tostring(
-                selected.title
-                or "Unknown title"
-            )
-
-        if author ~= "" then
-            label = label .. "\n" .. author
-        end
-
-        if selected.feedback == "want" then
-            label = label .. "\nWANT TO READ"
-        else
-            label =
-                label
-                .. "\nMatch score: "
-                .. string.format(
-                    "%.1f",
-                    selected.score or 0
-                )
-        end
-
-        table.insert(
-            buttons,
-            {
-                {
-                    text = label,
-                    callback =
-                        function()
-                            local reason =
-                                #(
-                                    selected.reasons
-                                    or {}
-                                ) > 0
-                                and table.concat(
-                                    selected.reasons,
-                                    "\n"
-                                )
-                                or "Strong overall taste match"
-
-                            local detail =
-                                (
-                                    author ~= ""
-                                    and author
-                                    or "Unknown author"
-                                )
-                                .. (
-                                    selected.year
-                                    and (
-                                        "\nFirst published: "
-                                        .. tostring(selected.year)
-                                    )
-                                    or ""
-                                )
-                                .. "\n\nWHY READING BRAIN PICKED IT\n"
-                                .. reason
-
-                            local current =
-                                Feedback:label(selected)
-
-                            if current then
-                                detail =
-                                    detail
-                                    .. "\n\nSTATUS\n"
-                                    .. current
-                            end
-
-                            self:closeDiscoveryDialog()
-
-                            self.discovery_dialog =
-                                ButtonDialog:new{
-                                    title =
-                                        tostring(
-                                            selected.title
-                                            or "BOOK MATCH"
-                                        ),
-                                    title_align = "center",
-                                    buttons = {
-                                        {
-                                            {
-                                                text = detail,
-                                                enabled = false,
-                                            },
-                                        },
-                                        {
-                                            {
-                                                text = _("Want to Read"),
-                                                callback =
-                                                    function()
-                                                        Feedback:set(
-                                                            selected,
-                                                            "want"
-                                                        )
-                                                        self:closeDiscoveryDialog()
-                                                        self:discoverBooks()
-                                                    end,
-                                            },
-                                            {
-                                                text = _("Not for Me"),
-                                                callback =
-                                                    function()
-                                                        Feedback:set(
-                                                            selected,
-                                                            "dismiss"
-                                                        )
-                                                        self:closeDiscoveryDialog()
-                                                        self:discoverBooks()
-                                                    end,
-                                            },
-                                        },
-                                        {
-                                            {
-                                                text = _("Already Own"),
-                                                callback =
-                                                    function()
-                                                        Feedback:set(
-                                                            selected,
-                                                            "owned"
-                                                        )
-                                                        self:closeDiscoveryDialog()
-                                                        self:discoverBooks()
-                                                    end,
-                                            },
-                                            {
-                                                text = _("Back"),
-                                                callback =
-                                                    function()
-                                                        self:closeDiscoveryDialog()
-                                                        self:discoverBooks()
-                                                    end,
-                                            },
-                                        },
-                                    },
-                                }
-
-                            UIManager:show(
-                                self.discovery_dialog
-                            )
-                        end,
-                },
-            }
-        )
-    end
-
-    table.insert(
-        buttons,
-        {
-            {
-                text = _("Refresh"),
-                callback =
-                    function()
-                        self:closeDiscoveryDialog()
-                        self:discoverBooks()
-                    end,
-            },
-            {
-                text = _("Close"),
-                callback =
-                    function()
-                        self:closeDiscoveryDialog()
-                    end,
-            },
-        }
-    )
-
-    local using_cache =
-        recommendations[1]
-        and recommendations[1].used_cache
-
-    self.discovery_dialog =
-        ButtonDialog:new{
-            title =
-                _("DISCOVER BOOKS")
-                .. "\n"
-                .. (
-                    using_cache
-                    and _("Cached results • based on your Bookmory ratings")
-                    or _("Based on your Bookmory ratings")
-                ),
-            title_align = "center",
-            buttons = buttons,
-        }
-
-    UIManager:show(self.discovery_dialog)
+    self:showDiscoveryResults()
 end
 
 function ReadingBrain:withStatsContext(callback)
