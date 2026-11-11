@@ -23,7 +23,6 @@ stats_patterns.lua
 backup_health.lua
 book_page.lua
 feedback.lua
-update_notifier.lua
 updater.lua
 README.md
 "
