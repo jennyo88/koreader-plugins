@@ -27,8 +27,7 @@
         "backup_health.lua",
         "feedback.lua",
         "book_page.lua",
-        "updater.lua",
-        "README.md"
+        "updater.lua"
       ]
     }
   }
