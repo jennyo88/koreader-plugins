@@ -4,109 +4,142 @@ local lfs = require("libs/libkoreader-lfs")
 
 local Stats = {}
 
-local DB_PATH =
+Stats.db_path =
     DataStorage:getSettingsDir()
     .. "/statistics.sqlite3"
 
+-- Page-level statistics are grouped into human-readable sessions.
+-- A gap greater than this starts a new session.
+Stats.session_gap_seconds = 10 * 60
+
+local function exists(path)
+    local a = lfs.attributes(path)
+    return a and a.mode == "file"
+end
+
 function Stats:read()
-    if lfs.attributes(DB_PATH, "mode") ~= "file" then
-        return {
-            available = false,
-            sessions = {},
-        }
+    local result = {
+        available = false,
+        books = {},
+        sessions = {},
+        total_seconds = 0,
+        page_rows = 0,
+    }
+
+    if not exists(self.db_path) then
+        return result, "KOReader statistics.sqlite3 was not found."
     end
 
-    local db = SQ3.open(DB_PATH, "ro")
+    local ok, err = pcall(function()
+        local db = SQ3.open(self.db_path)
+        db:exec("PRAGMA query_only = ON;")
 
-    local stmt =
-        db:prepare([[
+        local stmt = db:prepare([[
             SELECT
+                b.id,
                 b.title,
-                coalesce(b.authors, ''),
+                b.authors,
+                b.pages,
+                b.series,
+                b.md5,
                 p.start_time,
                 p.duration
-            FROM page_stat p
-            JOIN book b
-              ON b.id = p.id_book
+            FROM book b
+            JOIN page_stat_data p
+              ON p.id_book = b.id
             WHERE p.duration > 0
-            ORDER BY p.start_time;
+            ORDER BY b.id, p.start_time;
         ]])
 
-    local raw = {}
+        local rows, nrows = stmt:reset():resultset("i")
 
-    while true do
-        local row = stmt:step()
-        if not row then
-            break
-        end
+        local by_book = {}
 
-        table.insert(raw, {
-            title = row[1] or "Untitled",
-            authors = row[2] or "",
-            start_time = tonumber(row[3]) or 0,
-            duration = tonumber(row[4]) or 0,
-        })
-    end
+        if rows and nrows and nrows > 0 then
+            for i = 1, nrows do
+                local id_book = tonumber(rows[1][i])
+                local title = rows[2][i]
+                local authors = rows[3][i]
+                local pages = tonumber(rows[4][i])
+                local series = rows[5][i]
+                local md5 = rows[6][i]
+                local start_time = tonumber(rows[7][i]) or 0
+                local duration = tonumber(rows[8][i]) or 0
 
-    stmt:close()
-    db:close()
+                result.page_rows = result.page_rows + 1
 
-    local sessions = {}
-    local current
-    local GAP = 600
+                if not by_book[id_book] then
+                    by_book[id_book] = {
+                        id = id_book,
+                        title = title,
+                        authors = authors,
+                        pages = pages,
+                        series = series,
+                        md5 = md5,
+                        rows = {},
+                    }
 
-    for _, item in ipairs(raw) do
-        if item.start_time > 0 and item.duration > 0 then
-            local same =
-                current
-                and current.title == item.title
-                and current.authors == item.authors
+                    table.insert(result.books, by_book[id_book])
+                end
 
-            local last_end =
-                current
-                and (
-                    current._last_start
-                    + current._last_duration
-                )
-                or 0
-
-            if same
-                and item.start_time >= last_end
-                and item.start_time - last_end <= GAP then
-
-                current.duration =
-                    current.duration
-                    + item.duration
-
-                current._last_start =
-                    item.start_time
-
-                current._last_duration =
-                    item.duration
-            else
-                current = {
-                    title = item.title,
-                    authors = item.authors,
-                    start_time = item.start_time,
-                    duration = item.duration,
-                    _last_start = item.start_time,
-                    _last_duration = item.duration,
-                }
-
-                table.insert(sessions, current)
+                table.insert(by_book[id_book].rows, {
+                    start_time = start_time,
+                    duration = duration,
+                })
             end
         end
+
+        stmt:close()
+        db:close()
+
+        for _, book in ipairs(result.books) do
+            local current
+
+            for _, row in ipairs(book.rows) do
+                local row_end = row.start_time + row.duration
+
+                if not current
+                    or row.start_time > current.last_end + self.session_gap_seconds then
+
+                    current = {
+                        id_book = book.id,
+                        title = book.title,
+                        authors = book.authors,
+                        md5 = book.md5,
+                        start_time = row.start_time,
+                        duration = row.duration,
+                        last_end = row_end,
+                    }
+
+                    table.insert(result.sessions, current)
+                else
+                    current.duration =
+                        current.duration
+                        + row.duration
+
+                    if row_end > current.last_end then
+                        current.last_end = row_end
+                    end
+                end
+            end
+        end
+
+        for _, session in ipairs(result.sessions) do
+            result.total_seconds =
+                result.total_seconds
+                + (session.duration or 0)
+
+            session.last_end = nil
+        end
+
+        result.available = true
+    end)
+
+    if not ok then
+        return nil, tostring(err)
     end
 
-    for _, session in ipairs(sessions) do
-        session._last_start = nil
-        session._last_duration = nil
-    end
-
-    return {
-        available = true,
-        sessions = sessions,
-    }
+    return result
 end
 
 return Stats

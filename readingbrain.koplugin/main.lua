@@ -22,7 +22,7 @@ local _ = require("gettext")
 
 local Screen = Device.screen
 
-local PLUGIN_VERSION = "0.7.3"
+local PLUGIN_VERSION = "0.8.0"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -35,15 +35,31 @@ if plugin_dir and plugin_dir:sub(1, 1) ~= "/" then
 end
 plugin_dir = plugin_dir or "/mnt/us/koreader/plugins/readingbrain.koplugin"
 
-local Bookmory = dofile(plugin_dir .. "/bookmory.lua")
-local Library = dofile(plugin_dir .. "/library.lua")
-local Stats = dofile(plugin_dir .. "/stats.lua")
-local Brain = dofile(plugin_dir .. "/brain.lua")
-local Discovery = dofile(plugin_dir .. "/discovery.lua")
-local StatsPatterns = dofile(plugin_dir .. "/stats_patterns.lua")
-local BackupHealth = dofile(plugin_dir .. "/backup_health.lua")
-local Feedback = dofile(plugin_dir .. "/feedback.lua")
-local BookPage = dofile(plugin_dir .. "/book_page.lua")
+local module_errors = {}
+
+local function loadPluginModule(filename)
+    local ok, module_or_error =
+        pcall(
+            dofile,
+            plugin_dir .. "/" .. filename
+        )
+
+    if ok then
+        return module_or_error
+    end
+
+    module_errors[filename] = tostring(module_or_error)
+    return nil
+end
+
+local Bookmory = loadPluginModule("bookmory.lua")
+local Library = loadPluginModule("library.lua")
+local Stats = loadPluginModule("stats.lua")
+local Brain = loadPluginModule("brain.lua")
+local Discovery = loadPluginModule("discovery.lua")
+local StatsPatterns = loadPluginModule("stats_patterns.lua")
+local BackupHealth = loadPluginModule("backup_health.lua")
+local Feedback = loadPluginModule("feedback.lua")
 
 local function loadUpdater()
     local updater_path = plugin_dir .. "/updater.lua"
@@ -77,7 +93,9 @@ end
 local StatsDialog =
     InputContainer:extend{
         title = "",
+        subtitle = nil,
         body = "",
+        footer = nil,
         owner = nil,
         button_rows = nil,
     }
@@ -86,7 +104,7 @@ function StatsDialog:init()
     local card_width =
         math.floor(
             Screen:getWidth()
-            * 0.90
+            * 0.92
         )
 
     local content_width =
@@ -96,7 +114,7 @@ function StatsDialog:init()
     local title_face =
         Font:getFace(
             "cfont",
-            21
+            20
         )
 
     local body_face =
@@ -108,7 +126,7 @@ function StatsDialog:init()
     local small_face =
         Font:getFace(
             "cfont",
-            13
+            12
         )
 
     local title_widget =
@@ -119,6 +137,22 @@ function StatsDialog:init()
             alignment = "center",
             bold = true,
         }
+
+    local subtitle_widget
+
+    if self.subtitle
+        and tostring(self.subtitle) ~= "" then
+
+        subtitle_widget =
+            TextBoxWidget:new{
+                text = tostring(self.subtitle),
+                face = small_face,
+                width = content_width,
+                alignment = "center",
+                fgcolor =
+                    Blitbuffer.COLOR_DARK_GRAY,
+            }
+    end
 
     local divider =
         LineWidget:new{
@@ -194,7 +228,9 @@ function StatsDialog:init()
 
     local hint =
         TextWidget:new{
-            text = _("Reading Brain"),
+            text =
+                self.footer
+                or _("Reading Brain"),
             face = small_face,
             fgcolor =
                 Blitbuffer.COLOR_DARK_GRAY,
@@ -206,30 +242,44 @@ function StatsDialog:init()
 
             title_widget,
 
+            subtitle_widget
+            and VerticalSpan:new{
+                width =
+                    Screen:scaleBySize(5),
+            }
+            or VerticalSpan:new{
+                width = 0,
+            },
+
+            subtitle_widget
+            or VerticalSpan:new{
+                width = 0,
+            },
+
             VerticalSpan:new{
                 width =
-                    Screen:scaleBySize(10),
+                    Screen:scaleBySize(9),
             },
 
             divider,
 
             VerticalSpan:new{
                 width =
-                    Screen:scaleBySize(14),
+                    Screen:scaleBySize(11),
             },
 
             body_widget,
 
             VerticalSpan:new{
                 width =
-                    Screen:scaleBySize(16),
+                    Screen:scaleBySize(12),
             },
 
             buttons,
 
             VerticalSpan:new{
                 width =
-                    Screen:scaleBySize(8),
+                    Screen:scaleBySize(6),
             },
 
             hint,
@@ -238,7 +288,7 @@ function StatsDialog:init()
     local card =
         FrameContainer:new{
             padding =
-                Screen:scaleBySize(22),
+                Screen:scaleBySize(18),
 
             bordersize =
                 Screen:scaleBySize(2),
@@ -308,47 +358,89 @@ local function short_path(path)
     return path:gsub("^/mnt/us/", "")
 end
 
-local function bookmory_as_of_text()
-    local backup =
+local function basename(path)
+    return tostring(path or ""):match("([^/]+)$") or tostring(path or "")
+end
+
+local function stats_provenance_text()
+    if not Bookmory then
+        return "Bookmory backup • unavailable"
+    end
+
+    local backup, backup_time =
         Bookmory:findLatestBackup()
 
-    if not backup then
-        return "Bookmory data • No backup found"
+    local lines = {}
+
+    if backup then
+        table.insert(
+            lines,
+            "Bookmory backup • "
+            .. Bookmory:formatBackupDate(
+                backup,
+                backup_time
+            )
+        )
+    else
+        table.insert(
+            lines,
+            "Bookmory backup • Missing"
+        )
     end
 
-    local name =
-        tostring(backup):match("([^/]+)$")
-        or tostring(backup)
-
-    local year, month, day =
-        name:match(
-            "bookmory_(%d%d%d%d)(%d%d)(%d%d)"
+    if not Brain then
+        table.insert(
+            lines,
+            "History synced • unavailable"
         )
 
-    if year then
-        local timestamp =
-            os.time{
-                year = tonumber(year),
-                month = tonumber(month),
-                day = tonumber(day),
-                hour = 12,
-                min = 0,
-                sec = 0,
-            }
-
-        if timestamp then
-            return
-                "Bookmory data • As of "
-                .. os.date(
-                    "%b %d, %Y",
-                    timestamp
-                )
-        end
+        return table.concat(lines, "\n")
     end
 
-    return
-        "Bookmory data • "
-        .. name
+    local sync = Brain:getSyncInfo()
+    local synced_time = tonumber(sync.backup_time) or 0
+
+    if synced_time <= 0
+        and sync.backup then
+
+        synced_time =
+            Bookmory:getBackupTimestamp(
+                sync.backup
+            )
+            or 0
+    end
+
+    if synced_time > 0 then
+        table.insert(
+            lines,
+            "History synced • "
+            .. os.date(
+                "%b %d, %Y",
+                synced_time
+            )
+        )
+    else
+        table.insert(
+            lines,
+            "History synced • Never"
+        )
+    end
+
+    if backup
+        and backup_time
+        and (
+            synced_time <= 0
+            or backup_time > synced_time
+            or basename(backup) ~= basename(sync.backup)
+        ) then
+
+        table.insert(
+            lines,
+            "NEW BACKUP • Sync for current history"
+        )
+    end
+
+    return table.concat(lines, "\n")
 end
 
 local function authors_string(value)
@@ -359,17 +451,88 @@ local function book_key(title, authors)
     return Library:canonicalKey(title, authors)
 end
 
+local function modulesReady(feature, modules)
+    local missing = {}
+
+    for _, item in ipairs(modules or {}) do
+        if not item.module then
+            local detail = module_errors[item.file]
+
+            table.insert(
+                missing,
+                item.file
+                .. (
+                    detail
+                    and ("\n" .. detail)
+                    or ""
+                )
+            )
+        end
+    end
+
+    if #missing == 0 then
+        return true
+    end
+
+    UIManager:show(
+        InfoMessage:new{
+            text =
+                tostring(feature)
+                .. " is unavailable because a Reading Brain module could not be loaded.\n\n"
+                .. table.concat(missing, "\n\n")
+                .. "\n\nThe rest of Reading Brain can remain available.",
+        }
+    )
+
+    return false
+end
+
+local function moduleStatusText()
+    local failed = {}
+
+    for filename, err in pairs(module_errors) do
+        table.insert(
+            failed,
+            filename .. ": " .. tostring(err)
+        )
+    end
+
+    table.sort(failed)
+
+    if #failed == 0 then
+        return "All modules loaded successfully."
+    end
+
+    return
+        "Module problems:\n"
+        .. table.concat(failed, "\n")
+end
+
 function ReadingBrain:init()
     self.discovery_dialog = nil
     self.stats_dialog = nil
+    self.bookmory_cache = nil
+    self.kindle_cache = nil
 
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
     end
-
 end
 
 function ReadingBrain:syncUnifiedHistory()
+    if not modulesReady(
+        "Sync Reading History",
+        {
+            { file = "bookmory.lua", module = Bookmory },
+            { file = "library.lua", module = Library },
+            { file = "stats.lua", module = Stats },
+            { file = "brain.lua", module = Brain },
+            { file = "backup_health.lua", module = BackupHealth },
+        }
+    ) then
+        return
+    end
+
     local status = InfoMessage:new{
         text = _("Building unified reading history…"),
     }
@@ -377,7 +540,8 @@ function ReadingBrain:syncUnifiedHistory()
     UIManager:show(status)
     UIManager:forceRePaint()
 
-    local backup = Bookmory:findLatestBackup()
+    local backup, backup_time =
+        Bookmory:findLatestBackup()
 
     if not backup then
         UIManager:close(status)
@@ -392,31 +556,15 @@ function ReadingBrain:syncUnifiedHistory()
         return
     end
 
-    local db_path, extract_err =
-        Bookmory:extractDatabase(backup)
+    local bm_books, bm_err =
+        self:loadBookmoryBooks(true)
 
-    if not db_path then
+    if not bm_books then
         UIManager:close(status)
 
         UIManager:show(InfoMessage:new{
             text =
                 "Could not read the Bookmory backup.\n\n"
-                .. tostring(extract_err),
-        })
-
-        return
-    end
-
-    local bm_books, bm_err =
-        Bookmory:readBooks(db_path)
-
-    if not bm_books then
-        Bookmory:cleanup(db_path)
-        UIManager:close(status)
-
-        UIManager:show(InfoMessage:new{
-            text =
-                "Could not read the Bookmory database.\n\n"
                 .. tostring(bm_err),
         })
 
@@ -424,139 +572,164 @@ function ReadingBrain:syncUnifiedHistory()
     end
 
     local kindle_books =
-        Library:getBooks()
+        self:getKindleBooks(true)
 
     local title_index =
         Library:buildTitleIndex(kindle_books)
 
-    local ko_stats, stats_err =
-        Stats:read()
-
-    local brain_db =
-        Brain:open()
-
-    Brain:clearImportedData(brain_db)
-    brain_db:exec("BEGIN;")
+    local ko_stats, stats_err = Stats:read()
+    local brain_db = Brain:open()
 
     local imported_bookmory = 0
     local matched_bookmory = 0
-
-    -- Bookmory books + sessions.
-    for _, bm in ipairs(bm_books) do
-        local matched, match_status =
-            Library:matchOne(
-                bm.title,
-                bm.authors,
-                kindle_books,
-                title_index
-            )
-
-        local canonical_title =
-            matched and matched.title
-            or bm.title
-            or "Untitled"
-
-        local canonical_authors =
-            matched and authors_string(matched.authors)
-            or authors_string(bm.authors)
-
-        local key =
-            book_key(
-                canonical_title,
-                canonical_authors
-            )
-
-        if key then
-            Brain:upsertBook(brain_db, {
-                book_key = key,
-                title = canonical_title,
-                authors = canonical_authors,
-                kindle_file = matched and matched.file or nil,
-                bookmory_format = bm.book_type,
-                matched = match_status == "matched",
-            })
-
-            imported_bookmory =
-                imported_bookmory + 1
-
-            if match_status == "matched" then
-                matched_bookmory =
-                    matched_bookmory + 1
-            end
-
-            for _, session in ipairs(
-                Bookmory:getSessions(bm)
-            ) do
-                if (tonumber(session.duration) or 0) > 0 then
-                    session.book_key = key
-                    Brain:insertSession(
-                        brain_db,
-                        session
-                    )
-                end
-            end
-        end
-    end
-
-    -- KOReader statistics.
     local imported_koreader_sessions = 0
 
-    if ko_stats and ko_stats.available then
-        for _, session in ipairs(ko_stats.sessions or {}) do
-            local key =
-                book_key(
-                    session.title,
-                    session.authors
+    brain_db:exec("BEGIN;")
+
+    local imported_ok, import_err =
+        pcall(
+            function()
+                Brain:clearImportedData(brain_db)
+
+                for _, bm in ipairs(bm_books) do
+                    local matched, match_status =
+                        Library:matchOne(
+                            bm.title,
+                            bm.authors,
+                            kindle_books,
+                            title_index
+                        )
+
+                    local canonical_title =
+                        matched and matched.title
+                        or bm.title
+                        or "Untitled"
+
+                    local canonical_authors =
+                        matched and authors_string(matched.authors)
+                        or authors_string(bm.authors)
+
+                    local key =
+                        book_key(
+                            canonical_title,
+                            canonical_authors
+                        )
+
+                    if key then
+                        Brain:upsertBook(brain_db, {
+                            book_key = key,
+                            title = canonical_title,
+                            authors = canonical_authors,
+                            kindle_file = matched and matched.file or nil,
+                            bookmory_format = bm.book_type,
+                            matched = match_status == "matched",
+                        })
+
+                        imported_bookmory =
+                            imported_bookmory + 1
+
+                        if match_status == "matched" then
+                            matched_bookmory =
+                                matched_bookmory + 1
+                        end
+
+                        for _, session in ipairs(
+                            Bookmory:getSessions(bm)
+                        ) do
+                            if (tonumber(session.duration) or 0) > 0 then
+                                session.book_key = key
+                                Brain:insertSession(
+                                    brain_db,
+                                    session
+                                )
+                            end
+                        end
+                    end
+                end
+
+                if ko_stats and ko_stats.available then
+                    for _, session in ipairs(
+                        ko_stats.sessions or {}
+                    ) do
+                        local key =
+                            book_key(
+                                session.title,
+                                session.authors
+                            )
+
+                        if key
+                            and (tonumber(session.duration) or 0) > 0 then
+
+                            Brain:upsertBook(brain_db, {
+                                book_key = key,
+                                title = session.title or "Untitled",
+                                authors = session.authors or "",
+                                kindle_file = nil,
+                                bookmory_format = nil,
+                                matched = true,
+                            })
+
+                            Brain:insertSession(brain_db, {
+                                book_key = key,
+                                source = "KOReader",
+                                medium = "Kindle",
+                                start_time = session.start_time,
+                                duration = session.duration,
+                            })
+
+                            imported_koreader_sessions =
+                                imported_koreader_sessions + 1
+                        end
+                    end
+                end
+
+                Brain:setMeta(
+                    brain_db,
+                    "bookmory_backup",
+                    backup
                 )
 
-            if key
-                and (tonumber(session.duration) or 0) > 0 then
+                Brain:setMeta(
+                    brain_db,
+                    "bookmory_backup_time",
+                    tostring(backup_time or 0)
+                )
 
-                Brain:upsertBook(brain_db, {
-                    book_key = key,
-                    title = session.title or "Untitled",
-                    authors = session.authors or "",
-                    kindle_file = nil,
-                    bookmory_format = nil,
-                    matched = true,
-                })
-
-                Brain:insertSession(brain_db, {
-                    book_key = key,
-                    source = "KOReader",
-                    medium = "Kindle",
-                    start_time = session.start_time,
-                    duration = session.duration,
-                })
-
-                imported_koreader_sessions =
-                    imported_koreader_sessions + 1
+                Brain:setMeta(
+                    brain_db,
+                    "last_sync",
+                    tostring(os.time())
+                )
             end
-        end
+        )
+
+    if imported_ok then
+        brain_db:exec("COMMIT;")
+    else
+        brain_db:exec("ROLLBACK;")
     end
 
-    Brain:setMeta(
-        brain_db,
-        "bookmory_backup",
-        backup
-    )
-
-    Brain:setMeta(
-        brain_db,
-        "last_sync",
-        tostring(os.time())
-    )
-
-    brain_db:exec("COMMIT;")
     brain_db:close()
-
-    Bookmory:cleanup(db_path)
-    BackupHealth:markSynced(backup)
     UIManager:close(status)
 
-    local summary =
-        Brain:getSummary()
+    if not imported_ok then
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Reading history could not be rebuilt.\n\n"
+                    .. tostring(import_err)
+                    .. "\n\nThe previous Reading Brain cache was kept.",
+            }
+        )
+        return
+    end
 
+    BackupHealth:markSynced(
+        backup,
+        backup_time
+    )
+
+    local summary = Brain:getSummary()
     local stats_note = ""
 
     if not ko_stats then
@@ -566,6 +739,33 @@ function ReadingBrain:syncUnifiedHistory()
     elseif not ko_stats.available then
         stats_note =
             "\n\nKOReader statistics database was not available yet."
+    end
+
+    local timing = ""
+
+    if summary then
+        timing =
+            string.format(
+                "Unified sessions ........... %d\n",
+                summary.sessions
+            )
+            .. string.format(
+                "Elapsed reading time ........ %s\n",
+                hours_minutes(summary.elapsed_seconds)
+            )
+            .. string.format(
+                "Source logged time .......... %s",
+                hours_minutes(summary.seconds)
+            )
+
+        if (summary.overlap_seconds or 0) > 0 then
+            timing =
+                timing
+                .. string.format(
+                    "\nOverlap adjusted ............ %s",
+                    hours_minutes(summary.overlap_seconds)
+                )
+        end
     end
 
     self:showCardDialog(
@@ -585,176 +785,26 @@ function ReadingBrain:syncUnifiedHistory()
             "KOReader sessions .......... %d\n",
             imported_koreader_sessions
         )
-        .. string.format(
-            "Unified sessions ........... %d\n",
-            summary and summary.sessions or 0
-        )
-        .. string.format(
-            "Unified reading time ....... %s",
-            hours_minutes(
-                summary and summary.seconds or 0
-            )
-        )
+        .. timing
         .. stats_note
-        .. "\n\nKOReader statistics were read only and were not modified."
-    )
-end
-
-function ReadingBrain:showSummary()
-    local summary =
-        Brain:getSummary()
-
-    if not summary then
-        self:showCardDialog(
-            "UNIFIED SUMMARY",
-            "Reading Brain has not been synced yet.\n\n"
-            .. "Choose:\n"
-            .. "Sync Unified History"
+        .. "\n\nKOReader statistics and the Bookmory backup were read only.",
+        nil,
+        "Bookmory data • "
+        .. Bookmory:formatBackupDate(
+            backup,
+            backup_time
         )
-        return
-    end
-
-    self:showCardDialog(
-        "UNIFIED SUMMARY",
-        string.format(
-            "Books .............. %d\n",
-            summary.books
-        )
-        .. string.format(
-            "Matched books ...... %d\n",
-            summary.matched
-        )
-        .. string.format(
-            "Sessions ........... %d\n\n",
-            summary.sessions
-        )
-        .. "READING TIME\n"
-        .. string.format(
-            "Kindle ............. %s\n",
-            hours_minutes(summary.kindle_seconds)
-        )
-        .. string.format(
-            "Audiobook .......... %s\n",
-            hours_minutes(summary.audio_seconds)
-        )
-        .. string.format(
-            "External/Hybrid .... %s\n",
-            hours_minutes(summary.hybrid_seconds)
-        )
-        .. "────────────────────\n"
-        .. string.format(
-            "Combined ........... %s",
-            hours_minutes(summary.seconds)
-        )
-    )
-end
-
-function ReadingBrain:showRecentSessions()
-    local sessions =
-        Brain:getRecentSessions(18)
-
-    if #sessions == 0 then
-        self:showCardDialog(
-            "RECENT SESSIONS",
-            "No unified sessions yet.\n\n"
-            .. "Run Sync Reading History first."
-        )
-        return
-    end
-
-    local books =
-        self:loadBookmoryBooks()
-        or {}
-
-    local buttons = {}
-
-    for _, s in ipairs(sessions) do
-        local selected = s
-
-        local date =
-            os.date(
-                "%b %d • %I:%M %p",
-                selected.start_time
-            )
-
-        local label =
-            date
-            .. "\n"
-            .. tostring(
-                selected.title
-                or "Unknown title"
-            )
-            .. "\n"
-            .. tostring(
-                selected.medium
-                or "Unknown"
-            )
-            .. " • "
-            .. hours_minutes(
-                selected.duration
-            )
-
-        table.insert(
-            buttons,
-            {
-                {
-                    text = label,
-
-                    callback =
-                        function()
-                            local body =
-                                BookPage:build(
-                                    selected.book_key,
-                                    selected.title,
-                                    books
-                                )
-
-                            self:showCardDialog(
-                                selected.title
-                                or "BOOK",
-                                body
-                            )
-                        end,
-                },
-            }
-        )
-    end
-
-    table.insert(
-        buttons,
-        {
-            {
-                text = _("Close"),
-                callback =
-                    function()
-                        self:closeDiscoveryDialog()
-                    end,
-            },
-        }
-    )
-
-    self:closeDiscoveryDialog()
-
-    self.discovery_dialog =
-        ButtonDialog:new{
-            title = _("RECENT SESSIONS"),
-            title_align = "center",
-            buttons = buttons,
-        }
-
-    UIManager:show(
-        self.discovery_dialog
     )
 end
 
 function ReadingBrain:confirmRebuild()
     UIManager:show(ConfirmBox:new{
         text =
-            "Rebuild Reading Brain's unified history?\n\n"
+            "Sync Reading Brain's unified history?\n\n"
             .. "This only replaces Reading Brain's own imported cache.\n"
             .. "KOReader statistics and the Bookmory backup are never modified.",
 
-        ok_text = _("Rebuild"),
+        ok_text = _("Sync"),
         cancel_text = _("Cancel"),
 
         ok_callback = function()
@@ -774,8 +824,12 @@ function ReadingBrain:closeDiscoveryDialog()
     end
 end
 
-function ReadingBrain:loadBookmoryBooks()
-    local backup =
+function ReadingBrain:loadBookmoryBooks(force)
+    if not Bookmory then
+        return nil, module_errors["bookmory.lua"] or "Bookmory module is unavailable."
+    end
+
+    local backup, backup_time =
         Bookmory:findLatestBackup()
 
     if not backup then
@@ -783,34 +837,82 @@ function ReadingBrain:loadBookmoryBooks()
             "No .bookmory backup was found in /mnt/us/readingbrain/."
     end
 
+    local cache_key =
+        tostring(backup)
+        .. " :: "
+        .. tostring(backup_time or 0)
+
+    if not force
+        and self.bookmory_cache
+        and self.bookmory_cache.key == cache_key then
+
+        return
+            self.bookmory_cache.books,
+            nil,
+            backup,
+            backup_time
+    end
+
     local db_path, err =
-        Bookmory:extractDatabase(
-            backup
-        )
+        Bookmory:extractDatabase(backup)
 
     if not db_path then
         return nil, err
     end
 
     local books, read_err =
-        Bookmory:readBooks(
-            db_path
-        )
+        Bookmory:readBooks(db_path)
 
-    Bookmory:cleanup(
-        db_path
-    )
+    Bookmory:cleanup(db_path)
 
     if not books then
         return nil, read_err
     end
 
+    self.bookmory_cache = {
+        key = cache_key,
+        books = books,
+    }
+
+    return books, nil, backup, backup_time
+end
+
+function ReadingBrain:getKindleBooks(force)
+    if not Library then
+        return {}
+    end
+
+    local now = os.time()
+
+    if not force
+        and self.kindle_cache
+        and now - (self.kindle_cache.time or 0) < 300 then
+
+        return self.kindle_cache.books
+    end
+
+    local books = Library:getBooks()
+
+    self.kindle_cache = {
+        time = now,
+        books = books,
+    }
+
     return books
 end
 
 function ReadingBrain:showTasteProfile()
-    local books, err =
-        self:loadBookmoryBooks()
+    if not modulesReady(
+        "Taste Profile",
+        {
+            { file = "bookmory.lua", module = Bookmory },
+            { file = "discovery.lua", module = Discovery },
+        }
+    ) then
+        return
+    end
+
+    local books, err = self:loadBookmoryBooks()
 
     if not books then
         self:showCardDialog(
@@ -818,35 +920,40 @@ function ReadingBrain:showTasteProfile()
             "Could not build taste profile.\n\n"
             .. tostring(err)
         )
-
         return
     end
 
-    local profile =
-        Discovery:buildProfile(
-            books
-        )
+    local profile = Discovery:buildProfile(books)
 
     self:showCardDialog(
         "TASTE PROFILE",
-        Discovery:profileText(
-            profile
-        )
+        Discovery:profileText(profile),
+        nil,
+        stats_provenance_text()
     )
 end
 
 function ReadingBrain:discoverBooks()
-    local status =
-        InfoMessage:new{
-            text =
-                _("Finding books you may like…"),
+    if not modulesReady(
+        "Discover Books",
+        {
+            { file = "bookmory.lua", module = Bookmory },
+            { file = "library.lua", module = Library },
+            { file = "discovery.lua", module = Discovery },
+            { file = "feedback.lua", module = Feedback },
         }
+    ) then
+        return
+    end
+
+    local status = InfoMessage:new{
+        text = _("Finding books you may like…"),
+    }
 
     UIManager:show(status)
     UIManager:forceRePaint()
 
-    local books, err =
-        self:loadBookmoryBooks()
+    local books, err = self:loadBookmoryBooks()
 
     if not books then
         UIManager:close(status)
@@ -858,40 +965,40 @@ function ReadingBrain:discoverBooks()
                     .. tostring(err),
             }
         )
-
         return
     end
 
-    local kindle_books =
-        Library:getBooks()
+    local kindle_books = self:getKindleBooks()
 
-    local recommendations, discover_err =
+    local pool, discover_err =
         Discovery:recommend(
             books,
             kindle_books,
-            5
+            50
         )
 
     UIManager:close(status)
 
-    if not recommendations then
+    if not pool then
         UIManager:show(
             InfoMessage:new{
                 text =
                     "Book discovery failed.\n\n"
-                    .. tostring(
-                        discover_err
-                    ),
+                    .. tostring(discover_err),
             }
         )
-
         return
     end
 
-    recommendations =
-        Feedback:apply(
-            recommendations
+    local ranked = Feedback:apply(pool)
+    local recommendations = {}
+
+    for i = 1, math.min(5, #ranked) do
+        table.insert(
+            recommendations,
+            ranked[i]
         )
+    end
 
     if #recommendations == 0 then
         UIManager:show(
@@ -900,18 +1007,13 @@ function ReadingBrain:discoverBooks()
                     "No new recommendations were found this time.",
             }
         )
-
         return
     end
 
     local buttons = {}
 
-    for i, book in ipairs(
-        recommendations
-    ) do
-        local selected =
-            book
-
+    for i, book in ipairs(recommendations) do
+        local selected = book
         local author =
             table.concat(
                 selected.authors or {},
@@ -927,27 +1029,26 @@ function ReadingBrain:discoverBooks()
             )
 
         if author ~= "" then
-            label =
-                label
-                .. "\n"
-                .. author
+            label = label .. "\n" .. author
         end
 
-        label =
-            label
-            .. "\nMatch score: "
-            .. string.format(
-                "%.1f",
-                selected.score
-                or 0
-            )
+        if selected.feedback == "want" then
+            label = label .. "\nWANT TO READ"
+        else
+            label =
+                label
+                .. "\nMatch score: "
+                .. string.format(
+                    "%.1f",
+                    selected.score or 0
+                )
+        end
 
         table.insert(
             buttons,
             {
                 {
                     text = label,
-
                     callback =
                         function()
                             local reason =
@@ -971,9 +1072,7 @@ function ReadingBrain:discoverBooks()
                                     selected.year
                                     and (
                                         "\nFirst published: "
-                                        .. tostring(
-                                            selected.year
-                                        )
+                                        .. tostring(selected.year)
                                     )
                                     or ""
                                 )
@@ -981,9 +1080,7 @@ function ReadingBrain:discoverBooks()
                                 .. reason
 
                             local current =
-                                Feedback:label(
-                                    selected
-                                )
+                                Feedback:label(selected)
 
                             if current then
                                 detail =
@@ -1001,10 +1098,7 @@ function ReadingBrain:discoverBooks()
                                             selected.title
                                             or "BOOK MATCH"
                                         ),
-
-                                    title_align =
-                                        "center",
-
+                                    title_align = "center",
                                     buttons = {
                                         {
                                             {
@@ -1012,62 +1106,47 @@ function ReadingBrain:discoverBooks()
                                                 enabled = false,
                                             },
                                         },
-
                                         {
                                             {
-                                                text =
-                                                    _("Want to Read"),
-
+                                                text = _("Want to Read"),
                                                 callback =
                                                     function()
                                                         Feedback:set(
                                                             selected,
                                                             "want"
                                                         )
-
                                                         self:closeDiscoveryDialog()
                                                         self:discoverBooks()
                                                     end,
                                             },
-
                                             {
-                                                text =
-                                                    _("Not for Me"),
-
+                                                text = _("Not for Me"),
                                                 callback =
                                                     function()
                                                         Feedback:set(
                                                             selected,
                                                             "dismiss"
                                                         )
-
                                                         self:closeDiscoveryDialog()
                                                         self:discoverBooks()
                                                     end,
                                             },
                                         },
-
                                         {
                                             {
-                                                text =
-                                                    _("Already Own"),
-
+                                                text = _("Already Own"),
                                                 callback =
                                                     function()
                                                         Feedback:set(
                                                             selected,
                                                             "owned"
                                                         )
-
                                                         self:closeDiscoveryDialog()
                                                         self:discoverBooks()
                                                     end,
                                             },
-
                                             {
-                                                text =
-                                                    _("Back"),
-
+                                                text = _("Back"),
                                                 callback =
                                                     function()
                                                         self:closeDiscoveryDialog()
@@ -1091,20 +1170,15 @@ function ReadingBrain:discoverBooks()
         buttons,
         {
             {
-                text =
-                    _("Refresh"),
-
+                text = _("Refresh"),
                 callback =
                     function()
                         self:closeDiscoveryDialog()
                         self:discoverBooks()
                     end,
             },
-
             {
-                text =
-                    _("Close"),
-
+                text = _("Close"),
                 callback =
                     function()
                         self:closeDiscoveryDialog()
@@ -1127,40 +1201,66 @@ function ReadingBrain:discoverBooks()
                     and _("Cached results • based on your Bookmory ratings")
                     or _("Based on your Bookmory ratings")
                 ),
-
-            title_align =
-                "center",
-
-            buttons =
-                buttons,
+            title_align = "center",
+            buttons = buttons,
         }
 
-    UIManager:show(
-        self.discovery_dialog
-    )
+    UIManager:show(self.discovery_dialog)
 end
-
 
 function ReadingBrain:withStatsContext(callback)
-    local books, err = self:loadBookmoryBooks()
-    if not books then
-        UIManager:show(InfoMessage:new{ text = "Could not read Bookmory.\n\n" .. tostring(err) })
+    if not modulesReady(
+        "Stats & Patterns",
+        {
+            { file = "bookmory.lua", module = Bookmory },
+            { file = "brain.lua", module = Brain },
+            { file = "stats_patterns.lua", module = StatsPatterns },
+        }
+    ) then
         return
     end
+
+    local books, err = self:loadBookmoryBooks()
+
+    if not books then
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Could not read Bookmory.\n\n"
+                    .. tostring(err),
+            }
+        )
+        return
+    end
+
     local ok, result = pcall(callback, books)
+
     if not ok then
-        UIManager:show(InfoMessage:new{ text = "Could not build reading statistics.\n\n" .. tostring(result) })
+        UIManager:show(
+            InfoMessage:new{
+                text =
+                    "Could not build reading statistics.\n\n"
+                    .. tostring(result),
+            }
+        )
     end
 end
 
-
-function ReadingBrain:showCardDialog(title, text, button_rows)
+function ReadingBrain:showCardDialog(
+    title,
+    text,
+    button_rows,
+    subtitle,
+    footer
+)
     self:closeStatsDialog()
 
     self.stats_dialog =
         StatsDialog:new{
             title = title,
+            subtitle = subtitle,
             body = text,
+            footer = footer,
             owner = self,
             button_rows = button_rows,
         }
@@ -1180,42 +1280,19 @@ function ReadingBrain:closeStatsDialog()
     end
 end
 
-function ReadingBrain:showStatsText(title, text)
-    self:showCardDialog(
-        title,
-        text
-    )
-end
-
-function ReadingBrain:showThisYear()
-    self:withStatsContext(function(books) self:showStatsText("THIS YEAR", StatsPatterns:thisYear(books)) end)
-end
-function ReadingBrain:showMonthlyReading()
-    self:withStatsContext(function(books) self:showStatsText("MONTHLY READING", StatsPatterns:monthlyReading(books)) end)
-end
-function ReadingBrain:showReadingFormats()
-    self:withStatsContext(function(books) self:showStatsText("READING FORMATS", StatsPatterns:readingFormats(books)) end)
-end
-function ReadingBrain:showRatings()
-    self:withStatsContext(function(books) self:showStatsText("RATINGS", StatsPatterns:ratings(books)) end)
-end
-function ReadingBrain:showAuthorsGenres()
-    self:withStatsContext(function(books) self:showStatsText("AUTHORS & GENRES", StatsPatterns:authorsAndGenres(books)) end)
-end
-function ReadingBrain:showReadingHabits()
-    self:withStatsContext(function(books) self:showStatsText("READING HABITS", StatsPatterns:readingHabits(books)) end)
-end
-function ReadingBrain:showInterestingPatterns()
-    self:withStatsContext(function(books) self:showStatsText("INTERESTING PATTERNS", StatsPatterns:interestingPatterns(books)) end)
-end
-function ReadingBrain:showReadingRecords()
-    self:withStatsContext(function(books) self:showStatsText("READING RECORDS", StatsPatterns:readingRecords(books)) end)
-end
-
-
 function ReadingBrain:showReadingOverview()
-    local summary =
-        Brain:getSummary()
+    if not modulesReady(
+        "Reading Overview",
+        {
+            { file = "brain.lua", module = Brain },
+            { file = "bookmory.lua", module = Bookmory },
+            { file = "stats_patterns.lua", module = StatsPatterns },
+        }
+    ) then
+        return
+    end
+
+    local summary = Brain:getSummary()
 
     if not summary then
         self:showCardDialog(
@@ -1243,43 +1320,35 @@ function ReadingBrain:showReadingOverview()
                     summary.sessions
                 )
                 .. string.format(
-                    "Reading time ....... %s\n\n",
+                    "Elapsed reading .... %s\n",
+                    hours_minutes(summary.elapsed_seconds)
+                )
+                .. string.format(
+                    "Source logs ........ %s",
                     hours_minutes(summary.seconds)
                 )
-                .. "FORMAT MIX\n"
+
+            if (summary.overlap_seconds or 0) > 0 then
+                body =
+                    body
+                    .. string.format(
+                        "\nOverlap adjusted ... %s",
+                        hours_minutes(summary.overlap_seconds)
+                    )
+            end
+
+            body =
+                body
+                .. "\n\nFORMAT MIX\n"
                 .. StatsPatterns:readingFormats(books)
                 .. "\n\nTHIS YEAR\n"
                 .. StatsPatterns:thisYear(books)
 
             self:showCardDialog(
                 "READING OVERVIEW",
-                body
-            )
-        end
-    )
-end
-
-function ReadingBrain:showRatingsAndTaste()
-    self:withStatsContext(
-        function(books)
-            self:showCardDialog(
-                "RATINGS & TASTE",
-                StatsPatterns:ratings(books)
-                .. "\n\n────────────────────\n\n"
-                .. StatsPatterns:authorsAndGenres(books)
-            )
-        end
-    )
-end
-
-function ReadingBrain:showPatternsAndRecords()
-    self:withStatsContext(
-        function(books)
-            self:showCardDialog(
-                "PATTERNS & RECORDS",
-                StatsPatterns:interestingPatterns(books)
-                .. "\n\n────────────────────\n\n"
-                .. StatsPatterns:readingRecords(books)
+                body,
+                nil,
+                stats_provenance_text()
             )
         end
     )
@@ -1292,9 +1361,7 @@ function ReadingBrain:showStatsPage(page_index, books)
             build =
                 function()
                     return
-                        StatsPatterns:monthlyReading(
-                            books
-                        )
+                        StatsPatterns:monthlyReading(books)
                 end,
         },
         {
@@ -1302,13 +1369,9 @@ function ReadingBrain:showStatsPage(page_index, books)
             build =
                 function()
                     return
-                        StatsPatterns:ratings(
-                            books
-                        )
+                        StatsPatterns:ratings(books)
                         .. "\n\n────────────────────\n\n"
-                        .. StatsPatterns:authorsAndGenres(
-                            books
-                        )
+                        .. StatsPatterns:authorsAndGenres(books)
                 end,
         },
         {
@@ -1316,23 +1379,23 @@ function ReadingBrain:showStatsPage(page_index, books)
             build =
                 function()
                     return
-                        StatsPatterns:readingHabits(
-                            books
-                        )
+                        StatsPatterns:readingHabits(books)
                 end,
         },
         {
-            title = "PATTERNS & RECORDS",
+            title = "PATTERNS",
             build =
                 function()
                     return
-                        StatsPatterns:interestingPatterns(
-                            books
-                        )
-                        .. "\n\n────────────────────\n\n"
-                        .. StatsPatterns:readingRecords(
-                            books
-                        )
+                        StatsPatterns:interestingPatterns(books)
+                end,
+        },
+        {
+            title = "RECORDS",
+            build =
+                function()
+                    return
+                        StatsPatterns:readingRecords(books)
                 end,
         },
     }
@@ -1343,11 +1406,8 @@ function ReadingBrain:showStatsPage(page_index, books)
         page_index = 1
     end
 
-    local page =
-        pages[page_index]
-
-    local ok, body =
-        pcall(page.build)
+    local page = pages[page_index]
+    local ok, body = pcall(page.build)
 
     if not ok then
         UIManager:show(
@@ -1360,22 +1420,10 @@ function ReadingBrain:showStatsPage(page_index, books)
         return
     end
 
-    body =
-        bookmory_as_of_text()
-        .. "\n────────────────────\n\n"
-        .. body
-
-    local title =
-        page.title
-        .. "  •  "
-        .. tostring(page_index)
-        .. "/"
-        .. tostring(#pages)
-
     local buttons = {
         {
             {
-                text = _("‹ Previous"),
+                text = _("Previous"),
                 callback =
                     function()
                         self:showStatsPage(
@@ -1384,7 +1432,6 @@ function ReadingBrain:showStatsPage(page_index, books)
                         )
                     end,
             },
-
             {
                 text = _("Close"),
                 callback =
@@ -1392,9 +1439,8 @@ function ReadingBrain:showStatsPage(page_index, books)
                         self:closeStatsDialog()
                     end,
             },
-
             {
-                text = _("Next ›"),
+                text = _("Next"),
                 callback =
                     function()
                         self:showStatsPage(
@@ -1407,89 +1453,96 @@ function ReadingBrain:showStatsPage(page_index, books)
     }
 
     self:showCardDialog(
-        title,
+        page.title,
         body,
-        buttons
+        buttons,
+        stats_provenance_text(),
+        tostring(page_index)
+        .. " of "
+        .. tostring(#pages)
+        .. "  •  Reading Brain"
     )
 end
 
 function ReadingBrain:showStatsPager()
     self:withStatsContext(
         function(books)
-            self:showStatsPage(
-                1,
-                books
-            )
+            self:showStatsPage(1, books)
         end
     )
 end
 
 function ReadingBrain:showDataStatus()
-    local health =
-        BackupHealth:getStatus()
+    if not modulesReady(
+        "Data Status",
+        {
+            { file = "bookmory.lua", module = Bookmory },
+            { file = "library.lua", module = Library },
+            { file = "brain.lua", module = Brain },
+            { file = "backup_health.lua", module = BackupHealth },
+        }
+    ) then
+        return
+    end
 
-    local backup =
-        health.path
-        or Bookmory:findLatestBackup()
+    local backup, backup_time =
+        Bookmory:findLatestBackup()
+
+    local health =
+        BackupHealth:getStatus(
+            backup,
+            backup_time
+        )
 
     if not backup then
         self:showCardDialog(
-            "DATA STATUS  •  MISSING",
+            "DATA STATUS",
             "No .bookmory backup was found.\n\n"
             .. "Expected folder:\n"
-            .. "/mnt/us/readingbrain/"
+            .. "/mnt/us/readingbrain/",
+            nil,
+            "MISSING"
         )
         return
     end
 
-    local db_path, err =
-        Bookmory:extractDatabase(backup)
-
-    if not db_path then
-        self:showCardDialog(
-            "DATA STATUS  •  "
-            .. health.label,
-            "Could not read the Bookmory backup.\n\n"
-            .. tostring(err)
-        )
-        return
-    end
-
-    local books, read_err =
-        Bookmory:readBooks(db_path)
+    local books, read_err = self:loadBookmoryBooks()
 
     if not books then
-        Bookmory:cleanup(db_path)
-
         self:showCardDialog(
-            "DATA STATUS  •  "
-            .. health.label,
-            tostring(read_err)
+            "DATA STATUS",
+            tostring(read_err),
+            nil,
+            health.label
         )
         return
     end
 
-    local bm =
-        Bookmory:summarize(books)
-
-    local kindle =
-        Library:getBooks()
-
+    local bm = Bookmory:summarize(books)
+    local kindle = self:getKindleBooks()
     local matches =
         Library:matchBookmory(
             books,
             kindle
         )
 
-    Bookmory:cleanup(db_path)
+    local summary = Brain:getSummary()
+    local sync = Brain:getSyncInfo()
+    local synced_backup_time = tonumber(sync.backup_time) or 0
 
-    local summary =
-        Brain:getSummary()
+    if synced_backup_time <= 0
+        and sync.backup then
 
-    local sync_text =
-        summary
-        and (
-            "\n\nUNIFIED CACHE\n"
+        synced_backup_time =
+            Bookmory:getBackupTimestamp(sync.backup)
+            or 0
+    end
+
+    local sync_text = "\n\nUNIFIED CACHE\n"
+
+    if summary then
+        sync_text =
+            sync_text
             .. string.format(
                 "Books ............... %d\n",
                 summary.books
@@ -1499,16 +1552,48 @@ function ReadingBrain:showDataStatus()
                 summary.sessions
             )
             .. string.format(
-                "Reading time ........ %s",
-                hours_minutes(
-                    summary.seconds
-                )
+                "Elapsed time ........ %s\n",
+                hours_minutes(summary.elapsed_seconds)
             )
-        )
-        or "\n\nUNIFIED CACHE\nNot synced yet."
+            .. string.format(
+                "Source logs ......... %s",
+                hours_minutes(summary.seconds)
+            )
+
+        if (summary.overlap_seconds or 0) > 0 then
+            sync_text =
+                sync_text
+                .. string.format(
+                    "\nOverlap adjusted .... %s",
+                    hours_minutes(summary.overlap_seconds)
+                )
+        end
+
+        if synced_backup_time > 0 then
+            sync_text =
+                sync_text
+                .. "\nHistory source ...... "
+                .. os.date(
+                    "%b %d, %Y",
+                    synced_backup_time
+                )
+        end
+
+        if (sync.last_sync or 0) > 0 then
+            sync_text =
+                sync_text
+                .. "\nLast sync ........... "
+                .. os.date(
+                    "%b %d, %Y %I:%M %p",
+                    sync.last_sync
+                )
+        end
+    else
+        sync_text = sync_text .. "Not synced yet."
+    end
 
     local body =
-        BackupHealth:formatBody()
+        BackupHealth:formatBody(health)
         .. "\n\n"
         .. string.format(
             "Books ............... %d\n",
@@ -1520,9 +1605,7 @@ function ReadingBrain:showDataStatus()
         )
         .. string.format(
             "Logged time ......... %s\n\n",
-            hours_minutes(
-                bm.seconds
-            )
+            hours_minutes(bm.seconds)
         )
         .. "KINDLE MATCHING\n"
         .. string.format(
@@ -1544,9 +1627,10 @@ function ReadingBrain:showDataStatus()
         .. sync_text
 
     self:showCardDialog(
-        "DATA STATUS  •  "
-        .. health.label,
-        body
+        "DATA STATUS",
+        body,
+        nil,
+        health.label
     )
 end
 
@@ -1556,10 +1640,12 @@ function ReadingBrain:showAbout()
         "Version "
         .. PLUGIN_VERSION
         .. "\n\n"
-        .. "Unified reading history, discovery, statistics, and reading-pattern analysis.\n\n"
-        .. "Reading Brain writes only to:\n"
-        .. "/mnt/us/readingbrain/readingbrain.sqlite3\n\n"
-        .. "KOReader statistics and Bookmory backups are read only."
+        .. "Unified reading history, discovery, statistics, and evidence-based reading-pattern analysis.\n\n"
+        .. "Bookmory source folder:\n"
+        .. "/mnt/us/readingbrain/\n\n"
+        .. "Reading Brain writes only to its own cache and settings. KOReader statistics and Bookmory backups are read only.\n\n"
+        .. "Updates are checked only when you choose Check for Updates.\n\n"
+        .. moduleStatusText()
     )
 end
 
