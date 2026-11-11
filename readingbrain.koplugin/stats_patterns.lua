@@ -1320,8 +1320,7 @@ function StatsPatterns:interestingPatterns(bookmory_books)
             .. string.format("%.2f★", reliable.mean)
             .. " across "
             .. tostring(#reliable.ratings)
-            .. " rated books.
-Evidence: "
+            .. " rated books.\nEvidence: "
             .. (
                 #reliable.ratings >= 8
                 and "strong"
@@ -1336,8 +1335,7 @@ Evidence: "
             unpredictable.label
             .. " has one of your widest rating spreads across "
             .. tostring(#unpredictable.ratings)
-            .. " books.
-Evidence: "
+            .. " books.\nEvidence: "
             .. (
                 #unpredictable.ratings >= 8
                 and "strong"
@@ -1438,8 +1436,7 @@ Evidence: "
             .. string.format("%.0f%%", drift.recent_share * 100)
             .. " of your recent rated books versus "
             .. string.format("%.0f%%", drift.older_share * 100)
-            .. " earlier.
-Evidence: moderate"
+            .. " earlier.\nEvidence: moderate"
         )
     end
 
