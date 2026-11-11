@@ -22,7 +22,7 @@ local _ = require("gettext")
 
 local Screen = Device.screen
 
-local PLUGIN_VERSION = "0.7.1"
+local PLUGIN_VERSION = "0.7.3"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -40,7 +40,6 @@ local Library = dofile(plugin_dir .. "/library.lua")
 local Stats = dofile(plugin_dir .. "/stats.lua")
 local Brain = dofile(plugin_dir .. "/brain.lua")
 local Discovery = dofile(plugin_dir .. "/discovery.lua")
-local UpdateNotifier = dofile(plugin_dir .. "/update_notifier.lua")
 local StatsPatterns = dofile(plugin_dir .. "/stats_patterns.lua")
 local BackupHealth = dofile(plugin_dir .. "/backup_health.lua")
 local Feedback = dofile(plugin_dir .. "/feedback.lua")
@@ -398,23 +397,10 @@ function ReadingBrain:init()
     self.discovery_dialog = nil
     self.stats_dialog = nil
 
-    self.update_notifier =
-        UpdateNotifier:new{
-            plugin_id = "readingbrain",
-            plugin_name = "Reading Brain",
-            current_version = PLUGIN_VERSION,
-        }
-
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
     end
 
-end
-
-function ReadingBrain:onResume()
-    if self.update_notifier then
-        self.update_notifier:onWake()
-    end
 end
 
 function ReadingBrain:syncUnifiedHistory()
@@ -1677,21 +1663,6 @@ function ReadingBrain:addToMainMenu(menu_items)
             {
                 text = _("Settings & Updates"),
                 sub_item_table = {
-                    {
-                        text = _("Notify on wake when update available"),
-                        checked_func = function()
-                            return
-                                self.update_notifier
-                                and self.update_notifier:isEnabled()
-                        end,
-                        callback = function()
-                            if self.update_notifier then
-                                self.update_notifier:setEnabled(
-                                    not self.update_notifier:isEnabled()
-                                )
-                            end
-                        end,
-                    },
                     {
                         text = _("Check for Updates"),
                         callback = function()
