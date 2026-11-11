@@ -13,7 +13,7 @@
     },
     "readingbrain": {
       "name": "Reading Brain",
-      "version": "0.8.0",
+      "version": "0.7.3",
       "description": "Unified reading history, discovery, statistics, and reading patterns.",
       "files": [
         "_meta.lua",
@@ -27,7 +27,6 @@
         "backup_health.lua",
         "feedback.lua",
         "book_page.lua",
-        "update_notifier.lua",
         "updater.lua",
         "README.md"
       ]
