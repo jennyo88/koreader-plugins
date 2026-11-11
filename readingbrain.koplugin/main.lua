@@ -77,9 +77,7 @@ end
 local StatsDialog =
     InputContainer:extend{
         title = "",
-        subtitle = nil,
         body = "",
-        footer = nil,
         owner = nil,
         button_rows = nil,
     }
@@ -88,7 +86,7 @@ function StatsDialog:init()
     local card_width =
         math.floor(
             Screen:getWidth()
-            * 0.92
+            * 0.90
         )
 
     local content_width =
@@ -98,7 +96,7 @@ function StatsDialog:init()
     local title_face =
         Font:getFace(
             "cfont",
-            20
+            21
         )
 
     local body_face =
@@ -110,7 +108,7 @@ function StatsDialog:init()
     local small_face =
         Font:getFace(
             "cfont",
-            12
+            13
         )
 
     local title_widget =
@@ -121,22 +119,6 @@ function StatsDialog:init()
             alignment = "center",
             bold = true,
         }
-
-    local subtitle_widget
-
-    if self.subtitle
-        and tostring(self.subtitle) ~= "" then
-
-        subtitle_widget =
-            TextBoxWidget:new{
-                text = tostring(self.subtitle),
-                face = small_face,
-                width = content_width,
-                alignment = "center",
-                fgcolor =
-                    Blitbuffer.COLOR_DARK_GRAY,
-            }
-    end
 
     local divider =
         LineWidget:new{
@@ -212,9 +194,7 @@ function StatsDialog:init()
 
     local hint =
         TextWidget:new{
-            text =
-                self.footer
-                or _("Reading Brain"),
+            text = _("Reading Brain"),
             face = small_face,
             fgcolor =
                 Blitbuffer.COLOR_DARK_GRAY,
@@ -226,44 +206,30 @@ function StatsDialog:init()
 
             title_widget,
 
-            subtitle_widget
-            and VerticalSpan:new{
-                width =
-                    Screen:scaleBySize(5),
-            }
-            or VerticalSpan:new{
-                width = 0,
-            },
-
-            subtitle_widget
-            or VerticalSpan:new{
-                width = 0,
-            },
-
             VerticalSpan:new{
                 width =
-                    Screen:scaleBySize(9),
+                    Screen:scaleBySize(10),
             },
 
             divider,
 
             VerticalSpan:new{
                 width =
-                    Screen:scaleBySize(11),
+                    Screen:scaleBySize(14),
             },
 
             body_widget,
 
             VerticalSpan:new{
                 width =
-                    Screen:scaleBySize(12),
+                    Screen:scaleBySize(16),
             },
 
             buttons,
 
             VerticalSpan:new{
                 width =
-                    Screen:scaleBySize(6),
+                    Screen:scaleBySize(8),
             },
 
             hint,
@@ -272,7 +238,7 @@ function StatsDialog:init()
     local card =
         FrameContainer:new{
             padding =
-                Screen:scaleBySize(18),
+                Screen:scaleBySize(22),
 
             bordersize =
                 Screen:scaleBySize(2),
@@ -1188,21 +1154,13 @@ function ReadingBrain:withStatsContext(callback)
 end
 
 
-function ReadingBrain:showCardDialog(
-    title,
-    text,
-    button_rows,
-    subtitle,
-    footer
-)
+function ReadingBrain:showCardDialog(title, text, button_rows)
     self:closeStatsDialog()
 
     self.stats_dialog =
         StatsDialog:new{
             title = title,
-            subtitle = subtitle,
             body = text,
-            footer = footer,
             owner = self,
             button_rows = button_rows,
         }
@@ -1402,22 +1360,22 @@ function ReadingBrain:showStatsPage(page_index, books)
         return
     end
 
-    local subtitle =
+    body =
         bookmory_as_of_text()
+        .. "\n────────────────────\n\n"
+        .. body
 
     local title =
         page.title
-
-    local footer =
-        tostring(page_index)
-        .. " of "
+        .. "  •  "
+        .. tostring(page_index)
+        .. "/"
         .. tostring(#pages)
-        .. "  •  Reading Brain"
 
     local buttons = {
         {
             {
-                text = _("Previous"),
+                text = _("‹ Previous"),
                 callback =
                     function()
                         self:showStatsPage(
@@ -1436,7 +1394,7 @@ function ReadingBrain:showStatsPage(page_index, books)
             },
 
             {
-                text = _("Next"),
+                text = _("Next ›"),
                 callback =
                     function()
                         self:showStatsPage(
@@ -1451,9 +1409,7 @@ function ReadingBrain:showStatsPage(page_index, books)
     self:showCardDialog(
         title,
         body,
-        buttons,
-        subtitle,
-        footer
+        buttons
     )
 end
 
@@ -1588,10 +1544,9 @@ function ReadingBrain:showDataStatus()
         .. sync_text
 
     self:showCardDialog(
-        "DATA STATUS",
-        body,
-        nil,
-        health.label
+        "DATA STATUS  •  "
+        .. health.label,
+        body
     )
 end
 
