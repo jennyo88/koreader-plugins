@@ -11,7 +11,6 @@ TMP="/tmp/${PLUGIN}-install"
 BACKUP="/mnt/us/koreader/plugins/${PLUGIN}.koplugin.install-backup"
 
 BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}/${PLUGIN}.koplugin"
-MANIFEST_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/manifest.json"
 
 FILES="
 _meta.lua
@@ -35,61 +34,47 @@ echo "Branch: ${BRANCH}"
 echo
 
 rm -rf "${TMP}"
-mkdir -p "${TMP}"
-mkdir -p "${DATA_DIR}"
+mkdir -p "${TMP}" "${DATA_DIR}"
 
-echo "Checking manifest.json..."
-
-if curl -fsSL "${MANIFEST_URL}" -o "${TMP}/manifest.json"; then
-    if command -v python3 >/dev/null 2>&1; then
-        if python3 -m json.tool "${TMP}/manifest.json" >/dev/null 2>&1; then
-            echo "  manifest.json is valid JSON"
-        else
-            echo
-            echo "WARNING: manifest.json is not valid JSON."
-            echo "Reading Brain can still be installed, but"
-            echo "\"Check for Updates\" will fail until the manifest is fixed."
-            echo
-        fi
-    else
-        echo "  Downloaded manifest.json"
-        echo "  JSON validation skipped because python3 is unavailable."
-    fi
-else
-    echo
-    echo "WARNING: Could not download manifest.json."
-    echo "The plugin can still be installed, but update checks may fail."
-    echo
-fi
-
-echo
-echo "Downloading Reading Brain..."
-
+echo "Downloading complete plugin..."
 for FILE in ${FILES}; do
     echo "  ${FILE}"
-
-    if ! curl -fsSL "${BASE}/${FILE}" -o "${TMP}/${FILE}"; then
-        echo
-        echo "ERROR: Could not download ${FILE}"
-        echo "Nothing has been installed."
+    if ! curl -fSL "${BASE}/${FILE}" -o "${TMP}/${FILE}"; then
+        echo "ERROR: Could not download ${FILE}."
+        echo "Nothing was installed."
         rm -rf "${TMP}"
         exit 1
     fi
-
     if [ ! -s "${TMP}/${FILE}" ]; then
-        echo
-        echo "ERROR: ${FILE} downloaded as an empty file."
-        echo "Nothing has been installed."
+        echo "ERROR: ${FILE} is empty."
+        echo "Nothing was installed."
         rm -rf "${TMP}"
         exit 1
     fi
 done
 
 echo
-echo "All plugin files downloaded successfully."
+echo "All files downloaded."
 
 if [ -d "${TARGET}" ]; then
-    echo "Backing up current Reading Brain..."
+    echo "Backing up existing plugin..."
     rm -rf "${BACKUP}"
     cp -R "${TARGET}" "${BACKUP}"
 fi
+
+echo "Installing..."
+mkdir -p "${TARGET}"
+
+for FILE in ${FILES}; do
+    cp "${TMP}/${FILE}" "${TARGET}/${FILE}"
+done
+
+# v0.7.3 is manual-update only.
+# This is safe because the installed v0.7.3 main.lua does not load this file.
+rm -f "${TARGET}/update_notifier.lua"
+
+rm -rf "${TMP}"
+
+echo
+echo "Reading Brain installed successfully."
+echo "Restart KOReader."
