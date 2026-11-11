@@ -1,4 +1,5 @@
 {
+  "plugins": {
     "tbrrecommender": {
       "name": "TBR Recommender",
       "version": "0.2.1",
