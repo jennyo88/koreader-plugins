@@ -22,7 +22,7 @@ local _ = require("gettext")
 
 local Screen = Device.screen
 
-local PLUGIN_VERSION = "0.8.0"
+local PLUGIN_VERSION = "0.8.2"
 
 local source = debug.getinfo(1, "S").source
 if source:sub(1, 1) == "@" then
@@ -1305,48 +1305,12 @@ function ReadingBrain:showReadingOverview()
 
     self:withStatsContext(
         function(books)
-            local body =
-                "ALL TIME\n"
-                .. string.format(
-                    "Books .............. %d\n",
-                    summary.books
-                )
-                .. string.format(
-                    "Matched ............ %d\n",
-                    summary.matched
-                )
-                .. string.format(
-                    "Sessions ........... %d\n",
-                    summary.sessions
-                )
-                .. string.format(
-                    "Elapsed reading .... %s\n",
-                    hours_minutes(summary.elapsed_seconds)
-                )
-                .. string.format(
-                    "Source logs ........ %s",
-                    hours_minutes(summary.seconds)
-                )
-
-            if (summary.overlap_seconds or 0) > 0 then
-                body =
-                    body
-                    .. string.format(
-                        "\nOverlap adjusted ... %s",
-                        hours_minutes(summary.overlap_seconds)
-                    )
-            end
-
-            body =
-                body
-                .. "\n\nFORMAT MIX\n"
-                .. StatsPatterns:readingFormats(books)
-                .. "\n\nTHIS YEAR\n"
-                .. StatsPatterns:thisYear(books)
-
             self:showCardDialog(
                 "READING OVERVIEW",
-                body,
+                StatsPatterns:overview(
+                    books,
+                    summary
+                ),
                 nil,
                 stats_provenance_text()
             )

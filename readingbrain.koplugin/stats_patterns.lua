@@ -742,6 +742,234 @@ function StatsPatterns:thisYear(bookmory_books)
         .. b
 end
 
+
+function StatsPatterns:overview(bookmory_books, summary)
+    local sessions = unified_sessions()
+
+    if #sessions == 0 then
+        return "No unified history yet.\n\nRun Sync Reading History first."
+    end
+
+    local now = os.time()
+    local year = tonumber(os.date("%Y", now))
+    local year_sessions = {}
+    local active_days = {}
+    local touched_books = {}
+
+    for _, s in ipairs(sessions) do
+        if tonumber(os.date("%Y", s.start_time)) == year then
+            table.insert(year_sessions, s)
+            active_days[os.date("%Y-%m-%d", s.start_time)] = true
+
+            local key = normalize(s.title)
+
+            if key ~= "" then
+                touched_books[key] = true
+            end
+        end
+    end
+
+    local year_elapsed = merged_seconds(year_sessions)
+    local active_day_count = 0
+    local touched_book_count = 0
+
+    for _ in pairs(active_days) do
+        active_day_count = active_day_count + 1
+    end
+
+    for _ in pairs(touched_books) do
+        touched_book_count = touched_book_count + 1
+    end
+
+    local avg_active_day =
+        active_day_count > 0
+        and year_elapsed / active_day_count
+        or 0
+
+    local recent_start = now - 30 * 86400
+    local previous_start = now - 60 * 86400
+    local recent_sessions =
+        window_sessions(
+            sessions,
+            recent_start,
+            now + 1
+        )
+    local previous_sessions =
+        window_sessions(
+            sessions,
+            previous_start,
+            recent_start
+        )
+
+    local recent_elapsed = merged_seconds(recent_sessions)
+    local previous_elapsed = merged_seconds(previous_sessions)
+
+    local recent_days = {}
+
+    for _, s in ipairs(merge_intervals(recent_sessions)) do
+        recent_days[os.date("%Y-%m-%d", s.start_time)] = true
+    end
+
+    local recent_day_count = 0
+
+    for _ in pairs(recent_days) do
+        recent_day_count = recent_day_count + 1
+    end
+
+    local medium_totals = {
+        Kindle = 0,
+        Audiobook = 0,
+        ["External/Hybrid"] = 0,
+    }
+    local medium_total = 0
+
+    for _, s in ipairs(year_sessions) do
+        if medium_totals[s.medium] ~= nil then
+            medium_totals[s.medium] =
+                medium_totals[s.medium] + s.duration
+            medium_total = medium_total + s.duration
+        end
+    end
+
+    local rating_count = 0
+    local rating_total = 0
+    local high_rating_count = 0
+
+    for _, book in ipairs(bookmory_books or {}) do
+        local r = latest_rating(book)
+
+        if r then
+            rating_count = rating_count + 1
+            rating_total = rating_total + r
+
+            if r >= 4 then
+                high_rating_count = high_rating_count + 1
+            end
+        end
+    end
+
+    local lines = {
+        tostring(year) .. " SO FAR",
+        "Reading ............ " .. human(year_elapsed),
+        "Active days ........ " .. tostring(active_day_count),
+        "Books touched ....... " .. tostring(touched_book_count),
+        "Avg active day ...... " .. human(avg_active_day),
+        "",
+        "LAST 30 DAYS",
+        "Reading ............ " .. human(recent_elapsed),
+        "Active days ........ " .. tostring(recent_day_count),
+    }
+
+    if previous_elapsed > 0 then
+        local change =
+            ((recent_elapsed - previous_elapsed)
+            / previous_elapsed) * 100
+
+        table.insert(
+            lines,
+            string.format(
+                "Vs prior 30 days ... %+d%%",
+                math.floor(change + (change >= 0 and 0.5 or -0.5))
+            )
+        )
+    else
+        table.insert(
+            lines,
+            "Vs prior 30 days ... No baseline"
+        )
+    end
+
+    table.insert(lines, "")
+    table.insert(lines, "MEDIUM MIX • " .. tostring(year))
+
+    local max_medium = math.max(
+        medium_totals.Kindle,
+        medium_totals.Audiobook,
+        medium_totals["External/Hybrid"],
+        1
+    )
+
+    local medium_rows = {
+        {"Kindle", "Kindle"},
+        {"Audiobook", "Audiobook"},
+        {"Hybrid", "External/Hybrid"},
+    }
+
+    for _, row in ipairs(medium_rows) do
+        local label = row[1]
+        local key = row[2]
+        local sec = medium_totals[key]
+        local pct =
+            medium_total > 0
+            and sec / medium_total * 100
+            or 0
+
+        table.insert(
+            lines,
+            string.format(
+                "%-9s %s %3.0f%%",
+                label,
+                bar(sec, max_medium, 8),
+                pct
+            )
+        )
+    end
+
+    if rating_count > 0 then
+        table.insert(lines, "")
+        table.insert(lines, "TASTE SNAPSHOT")
+        table.insert(
+            lines,
+            "Rated books ........ "
+            .. tostring(rating_count)
+        )
+        table.insert(
+            lines,
+            string.format(
+                "Average rating ..... %.2f★",
+                rating_total / rating_count
+            )
+        )
+        table.insert(
+            lines,
+            string.format(
+                "4★ or better ....... %.0f%%",
+                high_rating_count / rating_count * 100
+            )
+        )
+    end
+
+    if summary then
+        table.insert(lines, "")
+        table.insert(lines, "ALL TIME")
+        table.insert(
+            lines,
+            "Elapsed reading ..... "
+            .. human(summary.elapsed_seconds)
+        )
+        table.insert(
+            lines,
+            "Books tracked ....... "
+            .. tostring(summary.books or 0)
+        )
+        table.insert(
+            lines,
+            "Sessions ............ "
+            .. tostring(summary.sessions or 0)
+        )
+
+        if (summary.overlap_seconds or 0) > 0 then
+            table.insert(
+                lines,
+                "Overlap removed ..... "
+                .. human(summary.overlap_seconds)
+            )
+        end
+    end
+
+    return table.concat(lines, "\n")
+end
+
 function StatsPatterns:monthlyReading(bookmory_books)
     local sessions = unified_sessions()
 
