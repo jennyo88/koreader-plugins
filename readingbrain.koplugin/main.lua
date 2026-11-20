@@ -2,6 +2,7 @@ local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
+local Dispatcher = require("dispatcher")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local Blitbuffer = require("ffi/blitbuffer")
 local ButtonTable = require("ui/widget/buttontable")
@@ -529,10 +530,29 @@ function ReadingBrain:init()
     self.bookmory_cache = nil
     self.kindle_cache = nil
 
+    self:onDispatcherRegisterActions()
+
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
     end
 end
+
+function ReadingBrain:onDispatcherRegisterActions()
+    Dispatcher:registerAction(
+        "reading_brain_open",
+        {
+            category = "none",
+            event = "OpenReadingBrain",
+            title = _("Open Reading Brain"),
+            general = true,
+        }
+    )
+end
+
+function ReadingBrain:onOpenReadingBrain()
+    self:showReadingOverview()
+end
+
 
 function ReadingBrain:syncUnifiedHistory()
     if not modulesReady(
