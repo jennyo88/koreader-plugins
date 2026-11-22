@@ -1,0 +1,7 @@
+*.bookmory
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.tmp
+.DS_Store
