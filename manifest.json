@@ -1,21 +1,9 @@
 {
   "plugins": {
-    "tbrrecommender": {
-      "name": "TBR Recommender",
-      "version": "0.2.1",
-      "description": "Recommends unread books already on your Kindle.",
-      "files": [
-        "_meta.lua",
-        "main.lua",
-        "library.lua",
-        "recommender.lua",
-        "updater.lua"
-      ]
-    },
     "readingbrain": {
       "name": "Reading Brain",
       "version": "0.8.3",
-      "description": "Unified reading history, discovery, statistics, and reading patterns.",
+      "description": "Unified reading history, discovery, statistics, taste analysis, and reading patterns.",
       "files": [
         "_meta.lua",
         "main.lua",
@@ -27,6 +15,28 @@
         "stats_patterns.lua",
         "backup_health.lua",
         "feedback.lua",
+        "updater.lua"
+      ]
+    },
+    "readingdashboard": {
+      "name": "Reading Dashboard",
+      "version": "0.5.3",
+      "description": "Compact in-book reading progress and session dashboard.",
+      "files": [
+        "_meta.lua",
+        "main.lua",
+        "updater.lua"
+      ]
+    },
+    "tbrrecommender": {
+      "name": "TBR Recommender",
+      "version": "0.2.1",
+      "description": "Recommends unread books already available in the local KOReader library.",
+      "files": [
+        "_meta.lua",
+        "main.lua",
+        "library.lua",
+        "recommender.lua",
         "updater.lua"
       ]
     }
