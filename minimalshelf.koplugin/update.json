@@ -1,6 +1,0 @@
-{
-  "plugin": "minimalshelf",
-  "version": "0.3.0",
-  "channel": "stable",
-  "notes": "Added an offline 2x2 cover gallery, cover-first home, and manual cover extraction."
-}
