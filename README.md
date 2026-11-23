@@ -8,7 +8,7 @@ This repository currently contains three active plugins:
 | --- | --- | --- |
 | **Reading Brain** | **0.8.3** | Unified reading history, discovery, reading statistics, taste analysis, and reading-pattern insights. |
 | **Reading Dashboard** | **0.5.3** | A compact in-book dashboard for current reading progress and session information. |
-| **TBR Recommender** | **0.2.1** | Recommends unread books already available in the local KOReader library. |
+| **TBR Recommender** | **0.3.0** | Recommends unread books already available in the local KOReader library. |
 
 ## Repository structure
 
@@ -134,7 +134,7 @@ It also supports its own manual update flow through the shared repository manife
 
 ## TBR Recommender
 
-**Current version: 0.2.1**
+**Current version: 0.3.0**
 
 TBR Recommender chooses from books already present in the local KOReader library.
 
