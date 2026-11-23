@@ -4,15 +4,19 @@ A personal KOReader plugin that recommends books already on your Kindle.
 
 ## Version
 
-`0.2.1`
+`0.3.0`
 
 ## Library
 
-Scans recursively:
+Scans EPUBs recursively from:
 
 ```text
 /mnt/us/koreader/books
 ```
+
+Completed books are excluded from normal TBR recommendations. `Continue a Series` still reads completed-book metadata so it can safely identify the earliest unfinished owned volume.
+
+The library scan is cached for five minutes, so **Pick Again** can reroll without rescanning the Kindle every time. Use **Settings & Updates → Refresh Library** after adding or removing books if you want an immediate rescan.
 
 ## Recommendation modes
 
@@ -26,7 +30,7 @@ Scans recursively:
 
 ## Recommendation card
 
-v0.2.0 replaces the plain result box with a custom e-ink-friendly card.
+Recommendations are shown in an e-ink-friendly card.
 
 Each recommendation is tappable and shows available metadata such as author, page count, series, and the reason it was selected.
 
@@ -35,14 +39,39 @@ The card includes:
 - **Pick Again**
 - **Close**
 
+During a KOReader session, **Pick Again** avoids showing the same books again for that mode until the available candidate pool has been cycled.
+
+## Gesture support
+
+KOReader's Gesture Manager can assign:
+
+```text
+TBR Recommender: Surprise Me
+```
+
+This runs the `Surprise Me` mode directly from a gesture.
+
 ## Series safety
 
-Continue a Series never recommends a later owned volume while an earlier owned volume is still unfinished.
+`Continue a Series` never recommends a later owned volume while an earlier owned volume is still unfinished.
 
-## Updates
+## Reliability
+
+`library.lua` and `recommender.lua` are loaded safely. If either module cannot load, TBR Recommender reports the problem instead of taking down the whole plugin.
+
+## Settings & Updates
 
 Use:
 
-**Tools → TBR Recommender → Check for Updates**
+```text
+Tools → TBR Recommender → Settings & Updates
+```
 
-Updates are staged, the previous version is backed up, and KOReader offers **Restart now / Restart later** after installation.
+Available actions:
+
+- **Refresh Library**
+- **Check for Updates**
+- **Restore Previous Version**
+- **About**
+
+Update checks are manual. Updates are staged, the previous version is backed up, and KOReader offers **Restart now / Restart later** after installation.

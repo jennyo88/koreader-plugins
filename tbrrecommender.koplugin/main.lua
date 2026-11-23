@@ -11,13 +11,14 @@ local LineWidget = require("ui/widget/linewidget")
 local Size = require("ui/size")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
+local Dispatcher = require("dispatcher")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local filemanagerutil = require("apps/filemanager/filemanagerutil")
 local _ = require("gettext")
 
-local PLUGIN_VERSION = "0.2.1"
+local PLUGIN_VERSION = "0.3.0"
 local Screen = Device.screen
 
 local source = debug.getinfo(1, "S").source
@@ -41,17 +42,60 @@ plugin_dir =
     plugin_dir
     or "/mnt/us/koreader/plugins/tbrrecommender.koplugin"
 
-local Library =
-    dofile(
-        plugin_dir
-        .. "/library.lua"
+local module_errors = {}
+
+local function loadPluginModule(filename)
+    local ok, module_or_error =
+        pcall(
+            dofile,
+            plugin_dir .. "/" .. filename
+        )
+
+    if ok then
+        return module_or_error
+    end
+
+    module_errors[filename] = tostring(module_or_error)
+    return nil
+end
+
+local Library = loadPluginModule("library.lua")
+local Recommender = loadPluginModule("recommender.lua")
+
+
+local function modulesReady()
+    local missing = {}
+
+    if not Library then
+        table.insert(
+            missing,
+            "library.lua\n"
+            .. tostring(module_errors["library.lua"] or "Could not load module.")
+        )
+    end
+
+    if not Recommender then
+        table.insert(
+            missing,
+            "recommender.lua\n"
+            .. tostring(module_errors["recommender.lua"] or "Could not load module.")
+        )
+    end
+
+    if #missing == 0 then
+        return true
+    end
+
+    UIManager:show(
+        InfoMessage:new{
+            text =
+                _("TBR Recommender is partially unavailable.\n\n")
+                .. table.concat(missing, "\n\n"),
+        }
     )
 
-local Recommender =
-    dofile(
-        plugin_dir
-        .. "/recommender.lua"
-    )
+    return false
+end
 
 
 local function loadUpdater()
@@ -478,11 +522,15 @@ local TBRRecommender =
 
 
 function TBRRecommender:init()
-    self.recommendation_dialog =
-        nil
+    self.recommendation_dialog = nil
+    self.last_mode = nil
 
-    self.last_mode =
-        nil
+    self.book_cache = nil
+    self.all_book_cache = nil
+    self.cache_time = 0
+    self.seen_by_mode = {}
+
+    self:onDispatcherRegisterActions()
 
     if self.ui
         and self.ui.menu then
@@ -494,17 +542,98 @@ function TBRRecommender:init()
 end
 
 
-function TBRRecommender:getBooks()
-    return Library:getCandidates(
-        "/mnt/us/koreader/books"
+function TBRRecommender:onDispatcherRegisterActions()
+    Dispatcher:registerAction(
+        "tbr_recommender_surprise",
+        {
+            category = "none",
+            event = "TBRRecommenderSurprise",
+            title = _("TBR Recommender: Surprise Me"),
+            general = true,
+        }
     )
 end
 
 
-function TBRRecommender:getAllBooks()
-    return Library:getAllBooks(
-        "/mnt/us/koreader/books"
+function TBRRecommender:onTBRRecommenderSurprise()
+    self:runMode("surprise")
+end
+
+
+function TBRRecommender:refreshLibrary()
+    self.book_cache = nil
+    self.all_book_cache = nil
+    self.cache_time = 0
+    self.seen_by_mode = {}
+
+    if not modulesReady() then
+        return
+    end
+
+    local books = self:getBooks(true)
+
+    UIManager:show(
+        InfoMessage:new{
+            text =
+                string.format(
+                    _("Library refreshed.\n\n%d unfinished EPUBs are eligible."),
+                    #books
+                ),
+        }
     )
+end
+
+
+function TBRRecommender:getAllBooks(force)
+    if not modulesReady() then
+        return {}
+    end
+
+    local now = os.time()
+
+    if not force
+        and self.all_book_cache
+        and now - (self.cache_time or 0) < 300 then
+
+        return self.all_book_cache
+    end
+
+    local all_books =
+        Library:getAllBooks(
+            "/mnt/us/koreader/books"
+        )
+
+    self.all_book_cache = all_books
+    self.book_cache = {}
+
+    for _, book in ipairs(all_books) do
+        if book.status ~= "complete" then
+            table.insert(
+                self.book_cache,
+                book
+            )
+        end
+    end
+
+    self.cache_time = now
+
+    return self.all_book_cache
+end
+
+
+function TBRRecommender:getBooks(force)
+    local now = os.time()
+
+    if not force
+        and self.book_cache
+        and now - (self.cache_time or 0) < 300 then
+
+        return self.book_cache
+    end
+
+    self:getAllBooks(force)
+
+    return self.book_cache or {}
 end
 
 
@@ -572,6 +701,70 @@ function TBRRecommender:pickAgain()
 end
 
 
+local function book_identity(book)
+    return tostring(
+        book
+        and (
+            book.file
+            or book.title
+            or book.filename
+        )
+        or ""
+    )
+end
+
+
+function TBRRecommender:filterFresh(mode, books, count)
+    local seen =
+        self.seen_by_mode[mode]
+        or {}
+
+    self.seen_by_mode[mode] = seen
+
+    local fresh = {}
+
+    for _, book in ipairs(books or {}) do
+        local key = book_identity(book)
+
+        if key ~= ""
+            and not seen[key] then
+
+            table.insert(fresh, book)
+
+            if #fresh >= (count or 3) then
+                break
+            end
+        end
+    end
+
+    if #fresh < (count or 3)
+        and #(books or {}) > #fresh then
+
+        seen = {}
+        self.seen_by_mode[mode] = seen
+        fresh = {}
+
+        for _, book in ipairs(books or {}) do
+            table.insert(fresh, book)
+
+            if #fresh >= (count or 3) then
+                break
+            end
+        end
+    end
+
+    for _, book in ipairs(fresh) do
+        local key = book_identity(book)
+
+        if key ~= "" then
+            seen[key] = true
+        end
+    end
+
+    return fresh
+end
+
+
 function TBRRecommender:showRecommendations(
     header,
     books
@@ -608,11 +801,13 @@ end
 
 
 function TBRRecommender:runMode(mode)
-    self.last_mode =
-        mode
+    if not modulesReady() then
+        return
+    end
 
-    local books =
-        self:getBooks()
+    self.last_mode = mode
+
+    local books = self:getBooks()
 
     if #books == 0
         and mode ~= "series" then
@@ -627,76 +822,78 @@ function TBRRecommender:runMode(mode)
         return
     end
 
-    if mode == "surprise" then
-        self:showRecommendations(
-            _("SURPRISE ME"),
+    local header = nil
+    local candidates = nil
 
+    if mode == "surprise" then
+        header = _("SURPRISE ME")
+        candidates =
             Recommender:surpriseMe(
                 books,
-                3
+                12
             )
-        )
 
     elseif mode == "quick" then
-        self:showRecommendations(
-            _("QUICK READ"),
-
+        header = _("QUICK READ")
+        candidates =
             Recommender:quickRead(
                 books,
-                3
+                12
             )
-        )
 
     elseif mode == "series" then
-        self:showRecommendations(
-            _("CONTINUE A SERIES"),
-
+        header = _("CONTINUE A SERIES")
+        candidates =
             Recommender:continueSeries(
                 self:getAllBooks(),
-                3
+                12
             )
-        )
 
     elseif mode == "unopened" then
-        self:showRecommendations(
-            _("UNOPENED BOOKS"),
-
+        header = _("UNOPENED BOOKS")
+        candidates =
             Recommender:unopened(
                 books,
-                3
+                12
             )
-        )
 
     elseif mode == "started" then
-        self:showRecommendations(
-            _("CONTINUE SOMETHING STARTED"),
-
+        header = _("CONTINUE SOMETHING STARTED")
+        candidates =
             Recommender:continueStarted(
                 books,
-                3
+                12
             )
-        )
 
     elseif mode == "different" then
-        self:showRecommendations(
-            _("SOMETHING DIFFERENT"),
-
+        header = _("SOMETHING DIFFERENT")
+        candidates =
             Recommender:somethingDifferent(
                 books,
-                3
+                12
             )
-        )
 
     elseif mode == "easy" then
-        self:showRecommendations(
-            _("SHORT & EASY"),
-
+        header = _("SHORT & EASY")
+        candidates =
             Recommender:shortAndEasy(
                 books,
-                3
+                12
             )
-        )
     end
+
+    if not candidates then
+        return
+    end
+
+    self:showRecommendations(
+        header,
+        self:filterFresh(
+            mode,
+            candidates,
+            3
+        )
+    )
 end
 
 
@@ -797,54 +994,77 @@ function TBRRecommender:addToMainMenu(
 
             {
                 text =
-                    _("Check for Updates"),
+                    _("Settings & Updates"),
 
-                callback =
-                    function()
-                        local Updater =
-                            loadUpdater()
+                sub_item_table = {
+                    {
+                        text =
+                            _("Refresh Library"),
 
-                        if Updater then
-                            Updater:checkForUpdates(
-                                PLUGIN_VERSION
-                            )
-                        end
-                    end,
-            },
+                        callback =
+                            function()
+                                self:refreshLibrary()
+                            end,
+                    },
 
-            {
-                text =
-                    _("Restore Previous Version"),
+                    {
+                        text =
+                            _("Check for Updates"),
 
-                callback =
-                    function()
-                        local Updater =
-                            loadUpdater()
+                        callback =
+                            function()
+                                local Updater =
+                                    loadUpdater()
 
-                        if Updater then
-                            Updater:confirmRestore()
-                        end
-                    end,
-            },
+                                if Updater then
+                                    Updater:checkForUpdates(
+                                        PLUGIN_VERSION
+                                    )
+                                end
+                            end,
+                    },
 
-            {
-                text =
-                    _("About"),
+                    {
+                        text =
+                            _("Restore Previous Version"),
 
-                callback =
-                    function()
-                        UIManager:show(
-                            InfoMessage:new{
-                                text =
-                                    "TBR Recommender"
-                                    .. "\n\nVersion "
-                                    .. PLUGIN_VERSION
-                                    .. "\n\nLibrary:"
-                                    .. "\n/mnt/us/koreader/books"
-                                    .. "\n\nSmarter TBR modes plus tappable recommendations.",
-                            }
-                        )
-                    end,
+                        callback =
+                            function()
+                                local Updater =
+                                    loadUpdater()
+
+                                if Updater then
+                                    Updater:confirmRestore()
+                                end
+                            end,
+                    },
+
+                    {
+                        text =
+                            _("About"),
+
+                        callback =
+                            function()
+                                local books = self:getBooks()
+
+                                UIManager:show(
+                                    InfoMessage:new{
+                                        text =
+                                            "TBR Recommender"
+                                            .. "\n\nVersion "
+                                            .. PLUGIN_VERSION
+                                            .. "\n\nLibrary:"
+                                            .. "\n/mnt/us/koreader/books"
+                                            .. "\n\nEligible unfinished EPUBs: "
+                                            .. tostring(#books)
+                                            .. "\n\nGesture action:"
+                                            .. "\nTBR Recommender: Surprise Me"
+                                            .. "\n\nUpdates are checked only when requested.",
+                                    }
+                                )
+                            end,
+                    },
+                },
             },
         },
     }
