@@ -30,7 +30,7 @@
     },
     "tbrrecommender": {
       "name": "TBR Recommender",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "description": "Recommends unread books already available in the local KOReader library.",
       "files": [
         "_meta.lua",
